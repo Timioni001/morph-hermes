@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.morph-data/
+.env
+*.db
+*.db-shm
+*.db-wal
