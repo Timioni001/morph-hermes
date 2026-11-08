@@ -279,3 +279,36 @@ def test_the_plugin_registers_against_the_real_hermes_contract(live_config):
     # No registered tool can approve anything.
     assert not any("approve" in name for name in registered["tools"])
     hostllm.bind(None)
+
+
+def test_several_processes_can_open_the_same_demo_database_at_once(tmp_path):
+    """Seeding must be idempotent and serialised.
+
+    The service, a `--print-tokens` run and a test fixture all legitimately open
+    the same SQLite file at the same time; without a write lock around the seed,
+    two of them saw an empty table and both inserted.
+    """
+    import concurrent.futures
+    import importlib
+    import os
+
+    os.environ["MORPH_DEMO_DATA_DIR"] = str(tmp_path)
+    import apps._runtime as runtime
+    importlib.reload(runtime)
+    storefront = importlib.reload(importlib.import_module("apps.storefront"))
+
+    def seed() -> None:
+        runtime._init_db(storefront.SPEC)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        for future in [pool.submit(seed) for _ in range(6)]:
+            future.result()
+
+    import sqlite3
+    connection = sqlite3.connect(str(tmp_path / "storefront.db"))
+    try:
+        count = connection.execute(
+            "SELECT COUNT(*) FROM records WHERE entity='orders'").fetchone()[0]
+    finally:
+        connection.close()
+    assert count == len(storefront.ORDERS.seed)

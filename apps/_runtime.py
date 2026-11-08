@@ -222,15 +222,24 @@ def _init_db(spec: AppSpec) -> None:
                 operation TEXT NOT NULL, changed TEXT NOT NULL, at REAL NOT NULL, actor TEXT NOT NULL);
             """
         )
-        for entity in spec.entities:
-            have = {r["id"] for r in db.execute("SELECT id FROM records WHERE entity=?", (entity.name,))}
+        # Seeding is idempotent and serialised across processes. Several processes
+        # legitimately open the same database at once (the service itself, a
+        # `--print-tokens` run, a test fixture), and without BEGIN IMMEDIATE two of
+        # them both saw an empty table and both inserted.
+        db.execute("BEGIN IMMEDIATE")
+        try:
             now = time.time()
-            for row in entity.seed:
-                rid = str(row[entity.primary_key])
-                if rid in have:
-                    continue
-                db.execute("INSERT INTO records (entity,id,version,updated_at,payload) VALUES (?,?,1,?,?)",
-                           (entity.name, rid, now, json.dumps(row, ensure_ascii=False)))
+            for entity in spec.entities:
+                for row in entity.seed:
+                    db.execute(
+                        "INSERT OR IGNORE INTO records (entity,id,version,updated_at,payload)"
+                        " VALUES (?,?,1,?,?)",
+                        (entity.name, str(row[entity.primary_key]), now,
+                         json.dumps(row, ensure_ascii=False)))
+            db.execute("COMMIT")
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
 
 
 # ───────────────────────────── predicate evaluation ────────────────────────────
