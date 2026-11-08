@@ -1,0 +1,8 @@
+name: morph
+version: 0.1.0
+description: Adaptive, action-capable workspaces composed from authorized application data.
+provides_tools:
+  - morph_catalog
+  - morph_design
+  - morph_state
+  - morph_propose_action
