@@ -1,8 +1,43 @@
 name: morph
-version: 0.1.0
-description: Adaptive, action-capable workspaces composed from authorized application data.
+label: MORPH
+version: 1.0.0
+description: >-
+  Adaptive, action-capable workspaces composed from the applications Hermes is
+  connected to. MORPH discovers each application's schema over HTTP, builds a
+  capability graph, plans a validated declarative interface for a goal stated in
+  plain language, resolves it against live data, and executes permitted writes only
+  after a human approves them — verifying each one by reading it back from the
+  source application.
+author: MORPH contributors
+license: MIT
+homepage: https://github.com/timioni001/morph-hermes
+manifest_version: 2
+requires_hermes: ">=0.19"
+tags:
+  - generative-ui
+  - integrations
+  - operations
+  - dashboard
 provides_tools:
-  - morph_catalog
-  - morph_design
-  - morph_state
+  - morph_discover
+  - morph_plan_workspace
+  - morph_workspace_state
+  - morph_refresh
+  - morph_inspect_record
   - morph_propose_action
+  - morph_verify_action
+provides_hooks:
+  - on_session_start
+  - pre_tool_call
+  - post_tool_call
+provides_middleware: []
+requires_env: []
+config_keys:
+  - morph.config
+config_schema:
+  config:
+    type: object
+    description: >-
+      MORPH's connector wiring, cross-application links and roles. Same shape as
+      config/connectors.default.json. Omit it to use
+      <plugin data dir>/config.json, MORPH_CONFIG_FILE, or the bundled default.

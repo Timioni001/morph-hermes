@@ -1,8 +1,23 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# MORPH and demo state is never committed: it is generated, and it holds tokens.
 .morph-data/
-.env
+.morph-demo/
 *.db
 *.db-shm
 *.db-wal
+*.token
+.env
+
+# Test-only artefacts
+.e2e-artifacts/
+tests/e2e/harness/vendor/
+tests/e2e/harness/static/
+node_modules/
+.media/

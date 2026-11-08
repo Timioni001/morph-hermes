@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MORPH — dashboard plugin harness</title>
+<!--
+  A stand-in for the Hermes web dashboard, implementing the documented plugin
+  contract and nothing else: React and the hooks come from
+  window.__HERMES_PLUGIN_SDK__, the plugin registers its page on
+  window.__HERMES_PLUGINS__, and the plugin's own routes are served under
+  /api/plugins/morph/. It exists so the browser tests drive the real dist bundle
+  against the real backend. It is not the Hermes dashboard and never claims to be.
+-->
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; background: #fff;
+         font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif; }
+  .harness-bar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+    border-bottom: 1px solid #e7ebf1; background: #fafbfd; font-size: 12px; color: #6b7689;
+  }
+  .harness-bar strong { color: #0b1220; }
+  main { padding: 20px max(16px, env(safe-area-inset-left)) 40px; max-width: 1480px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="harness-bar">
+  <strong>Hermes dashboard harness</strong>
+  <span>plugin tab /morph · SDK contract only</span>
+</div>
+<main><div id="plugin-root"></div></main>
+
+<script src="/static/react.production.min.js"></script>
+<script src="/static/react-dom.production.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var React = window.React;
+  var components = {};
+  // The host dashboard exposes shadcn-style primitives; MORPH does not use them,
+  // so the harness provides honest minimal stand-ins rather than pretending.
+  ["Card", "CardHeader", "CardTitle", "CardContent", "Badge", "Button", "Input", "Label",
+   "Select", "SelectOption", "Separator", "Tabs", "TabsList", "TabsTrigger", "PluginSlot"]
+    .forEach(function (name) {
+      components[name] = function (props) {
+        return React.createElement("div", { "data-sdk-component": name }, props && props.children);
+      };
+    });
+
+  window.__HERMES_PLUGIN_SDK__ = {
+    React: React,
+    hooks: {
+      useState: React.useState, useEffect: React.useEffect, useCallback: React.useCallback,
+      useMemo: React.useMemo, useRef: React.useRef, useContext: React.useContext,
+      createContext: React.createContext
+    },
+    components: components,
+    api: {
+      getStatus: function () { return Promise.resolve({ version: "harness" }); },
+      getSessions: function () { return Promise.resolve([]); },
+      getConfig: function () { return Promise.resolve({}); }
+    },
+    // The real SDK injects the dashboard session token here. The harness runs on
+    // loopback with no auth gate, which is exactly how Hermes serves a local
+    // dashboard, so the fetch is otherwise identical.
+    fetchJSON: function (url, init) {
+      return fetch(url, init).then(function (response) {
+        var isJson = (response.headers.get("content-type") || "").indexOf("json") >= 0;
+        return (isJson ? response.json() : response.text()).then(function (body) {
+          if (!response.ok) { throw (body && body.detail !== undefined) ? body : { detail: body }; }
+          return body;
+        });
+      });
+    },
+    utils: {
+      cn: function () { return Array.prototype.filter.call(arguments, Boolean).join(" "); },
+      timeAgo: function (value) { return String(value); },
+      isoTimeAgo: function (value) { return new Date(value).toLocaleString(); }
+    },
+    useI18n: function () { return { t: {}, locale: "en" }; }
+  };
+
+  var registered = {};
+  window.__HERMES_PLUGINS__ = {
+    register: function (name, Component) {
+      registered[name] = Component;
+      var root = window.ReactDOM.createRoot(document.getElementById("plugin-root"));
+      root.render(React.createElement(Component));
+      window.__HARNESS_MOUNTED__ = name;
+    },
+    registerSlot: function () { /* MORPH registers no slots */ }
+  };
+}());
+</script>
+<script src="/static/index.js"></script>
+</body>
+</html>

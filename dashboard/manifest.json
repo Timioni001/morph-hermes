@@ -1,13 +1,10 @@
 {
   "name": "morph",
   "label": "MORPH",
-  "description": "Adaptive, integrated workspaces shaped around your goal.",
+  "description": "Adaptive workspaces composed from the applications Hermes is connected to, with human-approved cross-application actions.",
   "icon": "Sparkles",
-  "version": "0.1.0",
-  "tab": {
-    "path": "/morph",
-    "position": "after:skills"
-  },
+  "version": "1.0.0",
+  "tab": { "path": "/morph", "position": "after:analytics" },
   "entry": "dist/index.js",
   "css": "dist/style.css",
   "api": "plugin_api.py"

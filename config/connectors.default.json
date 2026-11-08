@@ -1,0 +1,71 @@
+{
+  "$comment": "Default MORPH wiring: the three bundled demo applications on loopback. Copy to <plugin data dir>/config.json and edit, or point MORPH_CONFIG_FILE at your own file. See docs/CONNECTORS.md.",
+  "allow_loopback": true,
+  "allowed_hosts": ["127.0.0.1", "localhost"],
+  "planner_enabled": true,
+  "proposal_ttl_seconds": 3600,
+  "default_role": "operator",
+  "agent_role": "agent",
+  "user_roles": {},
+  "connectors": [
+    {
+      "id": "storefront",
+      "kind": "http-rest",
+      "label": "Storefront",
+      "base_url": "http://127.0.0.1:8811",
+      "token_env": "MORPH_STOREFRONT_TOKEN",
+      "timeout": 8.0
+    },
+    {
+      "id": "helpdesk",
+      "kind": "http-rest",
+      "label": "Helpdesk",
+      "base_url": "http://127.0.0.1:8812",
+      "token_env": "MORPH_HELPDESK_TOKEN",
+      "timeout": 8.0
+    },
+    {
+      "id": "warehouse",
+      "kind": "http-rest",
+      "label": "Warehouse",
+      "base_url": "http://127.0.0.1:8813",
+      "token_env": "MORPH_WAREHOUSE_TOKEN",
+      "timeout": 8.0
+    }
+  ],
+  "links": [
+    {
+      "name": "support_cases",
+      "source": "helpdesk.cases.order_ref",
+      "target": "storefront.orders.id",
+      "cardinality": "many"
+    },
+    {
+      "name": "shipments",
+      "source": "warehouse.shipments.order_ref",
+      "target": "storefront.orders.id",
+      "cardinality": "many"
+    },
+    {
+      "name": "stock_item",
+      "source": "storefront.orders.sku",
+      "target": "warehouse.stock_items.sku",
+      "cardinality": "one"
+    },
+    {
+      "name": "case_customer",
+      "source": "helpdesk.cases.customer_email",
+      "target": "storefront.customers.email",
+      "cardinality": "one"
+    }
+  ],
+  "roles": {
+    "operator": {
+      "label": "Operations lead",
+      "allow": ["*"],
+      "deny": ["storefront.orders.issue_refund"],
+      "max_risk": "medium",
+      "can_approve": true
+    }
+  }
+}

@@ -1,0 +1,48 @@
+# Submission entry for the Hermes plugin catalog.
+#
+# Copy this file into hermes-agent/plugin-catalog/morph.yaml in a PR, with `sha`
+# set to the exact commit being submitted (the catalog rejects branches and short
+# SHAs). Everything here is checked against the code at that commit by
+# `hermes plugins validate`.
+name: morph
+repo: https://github.com/timioni001/morph-hermes
+sha: "0000000000000000000000000000000000000000"  # set to the submitted commit
+title: "MORPH"
+description: >-
+  Adaptive, action-capable workspaces composed from the applications Hermes is
+  connected to. MORPH introspects each connected application's schema over HTTP,
+  builds a capability graph, plans a validated declarative interface for a goal
+  stated in plain language, resolves it against live data, and joins records
+  across applications. Writes are two-step: the agent may only propose, a human
+  approves in the MORPH dashboard tab, and every applied action is verified by
+  reading the record back from the source application. Disclosure — MORPH makes
+  outbound HTTPS calls to the applications the operator configures (loopback only
+  with an explicit opt-in), stores workspaces, pending proposals and a
+  hash-chained audit log in its own plugin-data SQLite database, reads connector
+  bearer tokens through agent.secret_scope by environment-variable name, and
+  calls the host model through ctx.llm for interface planning with a
+  deterministic offline fallback. No telemetry, no background processes, no shell
+  commands, no self-updating code.
+maintainer: timioni001
+tier: community
+category: tools
+requires_hermes: ">=0.19"
+version: "1.0.0"
+docs_url: https://github.com/timioni001/morph-hermes#readme
+readme: true
+platforms: []
+capabilities:
+  provides_tools:
+    - morph_discover
+    - morph_plan_workspace
+    - morph_workspace_state
+    - morph_refresh
+    - morph_inspect_record
+    - morph_propose_action
+    - morph_verify_action
+  provides_hooks:
+    - on_session_start
+    - pre_tool_call
+    - post_tool_call
+  provides_middleware: []
+  requires_env: []
