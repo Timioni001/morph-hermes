@@ -1,0 +1,566 @@
+.morph-root {
+  --morph-border: #e5eaf1;
+  --morph-muted: #64748b;
+  --morph-blue: #2459d3;
+  color: #17253d;
+  background: #f9fbfe;
+  border-radius: 20px;
+  font-family: Inter, ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  padding: 32px;
+  min-height: 76vh;
+  max-width: 1440px;
+  margin: auto;
+  box-sizing: border-box;
+}
+
+.morph-root * {
+  box-sizing: border-box;
+}
+
+.morph-root button,
+.morph-root input,
+.morph-root select {
+  font: inherit;
+}
+
+.morph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.morph-eyebrow {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .18em;
+  color: #72829b;
+}
+
+.morph-header h1 {
+  font-size: clamp(38px, 5vw, 60px);
+  line-height: 1.1;
+  letter-spacing: -.065em;
+  font-weight: 800;
+  margin: 9px 0;
+}
+
+.morph-symbol {
+  font-size: 31px;
+  vertical-align: top;
+  display: inline-block;
+  color: var(--morph-blue);
+  margin-left: 10px;
+}
+
+.morph-subtitle {
+  color: #6b7a93;
+  font-size: 15px;
+  margin: 0;
+}
+
+.morph-live {
+  white-space: nowrap;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid var(--morph-border);
+  border-radius: 50px;
+  font-size: 11px;
+  color: #53657b;
+  font-weight: 600;
+}
+
+.morph-dot {
+  display: inline-block;
+  background: #23b788;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px #d6f8ee;
+  margin-right: 9px;
+}
+
+.morph-command {
+  background: linear-gradient(
+    120deg,
+    #f3f7ff 0%,
+    #fff 82%
+  );
+  border: 1px solid #dce7fb;
+  border-radius: 20px;
+  box-shadow: 0 8px 30px rgba(36,89,211,.05);
+  padding: 22px;
+  margin-bottom: 26px;
+}
+
+.morph-command-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--morph-blue);
+}
+
+.morph-command-title > span {
+  background: #e7efff;
+  border-radius: 12px;
+  font-size: 19px;
+  padding: 7px 11px;
+}
+
+.morph-command-title strong {
+  display: block;
+  color: #152a4f;
+  font-size: 16px;
+  margin: 2px 0 4px;
+}
+
+.morph-command-title p {
+  color: #71809a;
+  font-size: 12px;
+  margin: 0 0 18px;
+}
+
+.morph-goal-form {
+  display: flex;
+  gap: 10px;
+}
+
+.morph-goal-form input {
+  background: #fff;
+  min-width: 0;
+  flex: 1;
+  padding: 14px 16px;
+  border: 1px solid #d6e0f1;
+  border-radius: 11px;
+  outline: none;
+  font-size: 13px;
+  color: #23324c;
+  transition: border-color .2s;
+}
+
+.morph-goal-form input:focus {
+  border-color: #3e76dd;
+  box-shadow: 0 0 0 3px #e1ebff;
+}
+
+.morph-root button {
+  cursor: pointer;
+  border: 1px solid #dfe5ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #324663;
+  font-weight: 650;
+  font-size: 12px;
+  padding: 10px 14px;
+  transition:
+    transform .16s,
+    background .16s,
+    box-shadow .16s;
+}
+
+.morph-root button:hover:not(:disabled) {
+  background: #f1f5ff;
+  transform: translateY(-1px);
+}
+
+.morph-root button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.morph-root button.morph-primary {
+  background: #2459d3;
+  color: #fff;
+  border-color: #2459d3;
+  white-space: nowrap;
+}
+
+.morph-root button.morph-primary:hover:not(:disabled) {
+  background: #1647b9;
+  box-shadow: 0 6px 16px #2459d333;
+}
+
+.morph-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 13px;
+}
+
+.morph-presets button {
+  font-size: 11px;
+  padding: 7px 11px;
+  border-radius: 30px;
+  color: #5371a1;
+  background: #fff;
+  border-color: #e1e8f7;
+}
+
+.morph-alert {
+  font-size: 12px;
+  border-radius: 10px;
+  padding: 13px 15px;
+  margin: 0 0 18px;
+}
+
+.morph-notice {
+  background: #e7f8ef;
+  border: 1px solid #bee8d0;
+  color: #186646;
+}
+
+.morph-error {
+  background: #fff0f0;
+  border-color: #f5c3c6;
+  color: #a0283c;
+}
+
+.morph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--morph-border);
+  margin-bottom: 25px;
+}
+
+.morph-tabs {
+  display: flex;
+  gap: 19px;
+}
+
+.morph-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 13px 1px;
+  font-size: 12px;
+  color: #8794aa;
+}
+
+.morph-tabs button.active {
+  color: var(--morph-blue);
+  border-bottom-color: var(--morph-blue);
+}
+
+.morph-count {
+  margin-left: 7px;
+  padding: 1px 6px;
+  border-radius: 20px;
+  color: #fff;
+  background: #e58a46;
+}
+
+.morph-revision {
+  font-size: 11px;
+  color: #8290a7;
+}
+
+.morph-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 19px;
+}
+
+.morph-section-heading h2 {
+  font-size: 21px;
+  letter-spacing: -.035em;
+  margin: 6px 0 0;
+  font-weight: 750;
+}
+
+.morph-widgets {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.morph-widget {
+  border: 1px solid var(--morph-border);
+  background: #fff;
+  border-radius: 15px;
+  min-width: 0;
+  box-shadow: 0 4px 18px rgba(12,42,97,.025);
+}
+
+.morph-metric {
+  grid-column: span 4;
+  padding: 22px;
+}
+
+.morph-muted {
+  display: flex;
+  align-items: center;
+  color: #7888a0;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 10px;
+}
+
+.morph-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  background: #edf3ff;
+  color: #3366d6;
+  border-radius: 9px;
+  font-size: 16px;
+}
+
+.morph-stat {
+  font-size: 39px;
+  font-weight: 780;
+  letter-spacing: -.06em;
+  margin: 10px 0 2px;
+}
+
+.morph-stat-caption {
+  font-size: 11px;
+  color: #95a0b2;
+}
+
+.morph-table-card {
+  grid-column: span 6;
+  padding: 18px 0 2px;
+}
+
+.morph-widget-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 14px;
+}
+
+.morph-widget-heading h3 {
+  font-size: 14px;
+  letter-spacing: -.015em;
+  font-weight: 750;
+  margin: 0 0 5px;
+}
+
+.morph-widget-heading p {
+  font-size: 11px;
+  color: #8d9aae;
+  margin: 0;
+}
+
+.morph-table-scroll {
+  overflow-x: auto;
+}
+
+.morph-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.morph-table th {
+  font-size: 10px;
+  color: #7d8ba1;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  font-weight: 700;
+  background: #f7f9fc;
+  padding: 11px 16px;
+}
+
+.morph-table td {
+  border-top: 1px solid #f0f3f8;
+  color: #344760;
+  padding: 12px 16px;
+}
+
+.morph-row-actions select {
+  max-width: 150px;
+  border: 1px solid #dfe7f4;
+  border-radius: 7px;
+  padding: 6px;
+  background: #fff;
+  color: #536685;
+  font-size: 11px;
+}
+
+.morph-pill {
+  border-radius: 20px;
+  background: #edf2fa;
+  color: #536b89;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.morph-pill-delayed,
+.morph-pill-high,
+.morph-pill-urgent {
+  background: #fff0e3;
+  color: #c66e27;
+}
+
+.morph-pill-fulfilled,
+.morph-pill-resolved {
+  background: #e6f8ef;
+  color: #2a9564;
+}
+
+.morph-pill-open {
+  background: #edf2fe;
+  color: #3964bf;
+}
+
+.morph-approvals {
+  background: #fff;
+  border: 1px solid var(--morph-border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.morph-approvals h2 {
+  font-size: 19px;
+  letter-spacing: -.03em;
+}
+
+.morph-hint {
+  font-size: 12px;
+  color: #7e8ca3;
+  max-width: 700px;
+  line-height: 1.7;
+}
+
+.morph-approval {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--morph-border);
+  padding: 17px 0;
+}
+
+.morph-approval strong {
+  font-size: 13px;
+}
+
+.morph-approval p {
+  font-size: 11px;
+  color: #64748b;
+  margin: 5px 0;
+}
+
+.morph-approval small,
+.morph-event small {
+  display: block;
+  color: #9ba9bb;
+  font-size: 11px;
+}
+
+.morph-approval-buttons {
+  display: flex;
+  gap: 9px;
+}
+
+.morph-event {
+  display: flex;
+  align-items: center;
+  padding: 14px 0;
+  border-top: 1px solid #edf0f5;
+  font-size: 12px;
+}
+
+.morph-event strong {
+  font-weight: 600;
+}
+
+.morph-event small {
+  margin-top: 5px;
+}
+
+.morph-empty,
+.morph-loading {
+  padding: 55px 12px;
+  color: #8e9bae;
+  text-align: center;
+  font-size: 13px;
+}
+
+.morph-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  color: #a0aabd;
+  margin: 32px 0 0;
+  border-top: 1px solid var(--morph-border);
+  padding-top: 17px;
+}
+
+@media (max-width: 950px) {
+  .morph-metric {
+    grid-column: span 4;
+  }
+
+  .morph-table-card {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 640px) {
+  .morph-root {
+    padding: 18px;
+    border-radius: 10px;
+  }
+
+  .morph-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .morph-live {
+    font-size: 10px;
+  }
+
+  .morph-command {
+    padding: 15px;
+  }
+
+  .morph-goal-form {
+    flex-direction: column;
+  }
+
+  .morph-goal-form button {
+    width: 100%;
+  }
+
+  .morph-metric {
+    grid-column: span 12;
+    padding: 17px;
+  }
+
+  .morph-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .morph-approval {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .morph-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .morph-footer {
+    flex-direction: column;
+  }
+}
