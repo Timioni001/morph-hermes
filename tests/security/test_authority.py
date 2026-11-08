@@ -99,11 +99,17 @@ def test_the_agent_role_cannot_be_given_approval_by_configuration(morph_home, mo
 
 
 def test_the_source_tree_contains_no_second_approval_path():
-    """Approval exists in exactly two places: the dashboard route and the
-    interactive CLI. A grep is a blunt instrument, and that is the point."""
+    """Within the product surfaces, approval is reachable from exactly two places:
+    the authenticated dashboard route and the interactive CLI (plus the engine
+    function they both call). A grep is a blunt instrument, and that is the point:
+    a new call site has to be noticed deliberately.
+
+    ``tests/`` and ``demo/`` are excluded because both are scripts a person runs,
+    standing in for the operator on purpose.
+    """
     callers = []
     for path in ROOT.rglob("*.py"):
-        if any(part in path.parts for part in (".venv", "node_modules", "tests")):
+        if any(part in path.parts for part in (".venv", "node_modules", "tests", "demo")):
             continue
         text = path.read_text(encoding="utf-8")
         for match in re.finditer(r"\bengine\.approve\b|\bactions\.approve\b", text):

@@ -534,7 +534,20 @@ def _render_viewer(spec: AppSpec, data: dict[str, list[dict[str, Any]]]) -> str:
     parts: list[str] = []
     for entity in spec.entities:
         rows = data.get(entity.name, [])
-        columns = [f.name for f in entity.fields][:9]
+        # Show what a person checking on a record cares about: its key, its name,
+        # its status-like fields, and every field an operation can write — so a
+        # change made through an integration is visible here without hunting.
+        preferred = [entity.primary_key, entity.title_field]
+        preferred += [f.name for f in entity.fields if f.writable]
+        preferred += [f.name for f in entity.fields
+                      if f.role in ("status", "metric", "amount")]
+        preferred += [f.name for f in entity.fields]
+        columns: list[str] = []
+        for name in preferred:
+            if name not in columns:
+                columns.append(name)
+            if len(columns) >= 10:
+                break
         head = "".join(f"<th>{_esc(c.replace('_', ' ').title())}</th>" for c in columns + ["Version"])
         body = "".join(
             "<tr>" + "".join(f"<td>{_esc(r.get(c))}</td>" for c in columns)
