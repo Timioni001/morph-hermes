@@ -6,6 +6,7 @@ submission time is exactly when it gets done wrong, so:
 
     python scripts/prepare_catalog_entry.py            # uses HEAD, prints the entry
     python scripts/prepare_catalog_entry.py --write    # also writes plugin-catalog-morph.yaml
+                                                       # and plugin-catalog-pr-body.md
 
 Copy the output into hermes-agent as plugin-catalog/morph.yaml in your PR.
 It refuses to stamp a commit that is not pushed, because the catalog CI clones
@@ -85,6 +86,12 @@ def main(argv: list[str] | None = None) -> int:
         out = ROOT / "plugin-catalog-morph.yaml"
         out.write_text(text, encoding="utf-8")
         print(f"\n→ wrote {out}", file=sys.stderr)
+        template = ROOT / "docs" / "CATALOG_PR.md"
+        if template.is_file():
+            body = ROOT / "plugin-catalog-pr-body.md"
+            body.write_text(template.read_text(encoding="utf-8").replace("<sha>", sha),
+                            encoding="utf-8")
+            print(f"→ wrote {body} (paste it as the PR description)", file=sys.stderr)
     print(f"\n→ pinned {sha}", file=sys.stderr)
     print(f"→ open the PR against NousResearch/hermes-agent adding "
           f"plugin-catalog/morph.yaml", file=sys.stderr)

@@ -29,6 +29,9 @@ and it derives what can be read and what can be safely changed from the schema a
 
 ![MORPH inside the Hermes dashboard](docs/assets/morph-in-hermes.png)
 
+<sub>A change waiting for a person, in the real Hermes dashboard. Shown with the offline
+sandbox connected; a GitHub repository looks the same, with issues in place of orders.</sub>
+
 ---
 
 ## Contents
@@ -398,6 +401,10 @@ suite that executes and a contract that was read.
   and 3 hooks; `hermes plugins validate` passes every check with `security scan — safe`
   and no cautions; `hermes morph doctor` finds all three applications reachable with the
   plugin data directory writable.
+- **`hermes morph connect` in that same Hermes**: `connect sandbox` then `up` brought
+  three services up and `doctor` reported healthy; `connect github` against the real
+  GitHub API connected a public repository read-only with no token, and a repository
+  that does not answer was refused with the configuration left untouched.
 - **The MORPH tab renders in the real Hermes web dashboard** — in the navigation under
   Plugins, mounted through the host's own `window.__HERMES_PLUGIN_SDK__`, API served from
   `/api/plugins/morph/`, live values from all three applications, no console errors.
@@ -470,7 +477,8 @@ dev extra is for the tests and the demo.
 | `docs/ARCHITECTURE.md` | the eight stages in detail |
 | `docs/CONNECTORS.md` | the adapter contract and worked examples |
 | `docs/SECURITY.md` | the threat model and what is enforced where |
-| `docs/DEMO.md` | what the demo proves, step by step |
+| `docs/DEMO.md` | what the offline sandbox run proves, step by step |
+| `docs/SUBMISSION.md` | the catalog PR, step by step |
 | `docs/WSL.md` | Windows/WSL2 runbook |
 
 ---
