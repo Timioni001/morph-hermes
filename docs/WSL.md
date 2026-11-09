@@ -239,9 +239,16 @@ Deadline is **5PM EST on 11 November**.
 
 ## Reclaiming disk space
 
-Deleting files inside WSL does **not** give the space back to Windows. The
-virtual disk only ever grows, so after a cleanup Windows still sees it as full.
-You have to shrink it too, and that is the step people miss.
+Check `df -h /` before assuming this is your problem. A WSL instance that dies
+mid-build is more often out of **memory** than out of disk — the VM is capped at
+roughly half your Windows RAM and terminates instead of reporting an error, which
+looks identical from the terminal. Raise `memory=` in `C:\Users\<you>\.wslconfig`
+and `wsl --shutdown` to apply.
+
+If `df` does show the disk full: deleting files inside WSL does **not** give the
+space back to Windows. The virtual disk only ever grows, so after a cleanup
+Windows still sees it as full. You have to shrink it too, and that is the step
+people miss.
 
 First, from inside WSL, find what is large:
 
@@ -259,6 +266,16 @@ du -sh ~/.hermes ~/.cache/uv ~/.cache/pip ~/.cache/ms-playwright ~/.npm 2>/dev/n
 rm -rf ~/.cache/uv ~/.cache/pip ~/.npm/_cacache
 sudo apt clean
 ```
+
+Hermes keeps its own store under `~/.hermes`, and manages it itself — prefer its
+collector over deleting by hand:
+
+```bash
+hermes pm gc
+```
+
+`~/.hermes/cache/scratch` holds leftover build scratch and can grow to several
+gigabytes; it is rebuildable.
 
 MORPH's own footprint is about 75 MB including its virtual environment, so it
 is not worth touching. `make clean` reclaims roughly 50 MB if you want it back.
@@ -297,5 +314,6 @@ space on Windows first.
 | `No module named 'fastapi'` | `pip install -e ".[dev]"` has not run in this venv | run it; every entry point now says so instead of showing a traceback |
 | `pytest` errors mention `/usr/lib/python3.x` | a system `pytest` was found on `PATH` | use `make test`, or `./.venv/bin/python -m pytest` |
 | `error: externally-managed-environment` | the venv is not active in this shell (no `(.venv)` in the prompt) | `make install` — it never needs activation |
-| WSL dies part-way through the Hermes install | the virtual disk filled your Windows drive | see *Reclaiming disk space* above; freeing space inside WSL alone is not enough |
+| WSL shuts down part-way through a build | usually **memory**, not disk — WSL2 caps itself at about half your Windows RAM and the VM dies rather than the command failing | check `free -h`, then raise `memory=` in `C:\Users\<you>\.wslconfig` and `wsl --shutdown` |
+| …and genuinely no space (`df -h /` confirms it) | the virtual disk filled your Windows drive | see *Reclaiming disk space* above; freeing space inside WSL alone is not enough |
 | A `make` target reinstalls every time | `pyproject.toml` is newer than `.venv/.installed` | expected once after a `git pull` that changed it; otherwise `make reinstall` |
