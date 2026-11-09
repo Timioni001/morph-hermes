@@ -97,9 +97,11 @@ MORPH has no Python dependencies of its own — it uses what Hermes already ship
 it outside Hermes (tests, the demo, the dashboard harness):
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"
+make install          # creates .venv and installs the dev extra
 ```
+
+Every `make` target runs through `.venv/bin/python`, so it behaves the same whether or
+not the virtual environment is activated in your current shell.
 
 Then run the whole showcase in one command:
 
@@ -218,10 +220,10 @@ docs/             architecture, connectors, security, demo
 ## Tests
 
 ```bash
-pytest                      # 176 tests: unit, integration against the real services, security
-scripts/e2e.sh              # 39 browser checks, Chromium, the real bundle and the real API
-node scripts/build_dashboard.mjs --check   # the committed bundle matches its sources
-hermes plugins validate .   # the catalog admission checks
+make test        # 176 tests: unit, integration against the real services, security
+make e2e         # 39 browser checks, Chromium, the real bundle and the real API
+make bundle      # the committed bundle matches its sources
+make validate    # the Hermes catalog admission checks
 ```
 
 The integration tests start the three demo applications as real subprocesses on their own

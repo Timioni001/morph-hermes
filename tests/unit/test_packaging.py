@@ -80,11 +80,18 @@ def test_the_catalog_entry_is_consistent_with_the_manifest():
 
 
 def test_no_binary_or_bytecode_is_committed():
-    """Catalog rule 17: everything shipped must be readable source."""
+    """Catalog rule 17: everything shipped must be readable source.
+
+    Skipped outside a git checkout — a source tarball has no index to ask, and the
+    rule is about what the catalog clones, which is always a checkout.
+    """
     magic = (b"\x7fELF", b"MZ", b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xce", b"\x00asm")
     offenders = []
-    tracked = subprocess.run(["git", "ls-files"], cwd=str(ROOT), capture_output=True,
-                             text=True, check=True).stdout.split()
+    listing = subprocess.run(["git", "ls-files"], cwd=str(ROOT), capture_output=True,
+                             text=True, check=False)
+    if listing.returncode != 0:
+        pytest.skip("not a git checkout, so there is no committed file list to audit")
+    tracked = listing.stdout.split()
     for name in tracked:
         path = ROOT / name
         if not path.is_file():

@@ -44,15 +44,24 @@ sudo apt install -y nodejs          # NOT "nodejs npm" — see below
 ```bash
 git clone https://github.com/timioni001/morph-hermes ~/morph-hermes
 cd ~/morph-hermes
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"          # do not skip this — nothing works until it runs
-python -c "import fastapi, uvicorn, httpx, pytest; print('ready')"
+make install
 ```
 
-> **Run everything through `python -m`**, not the bare command. With a venv active
-> but empty, `pytest` falls through `PATH` to a system install and reports confusing
-> errors from the wrong interpreter. `python -m pytest` can only ever use the
-> interpreter you activated.
+`make` is the paved path: every target runs through `.venv/bin/python`, so it works
+the same whether or not you activated the virtual environment **in this particular
+shell**. Activation does not survive a new terminal, an SSH reconnect or a WSL
+restart, and on Ubuntu a bare `pip` outside a venv refuses with
+`externally-managed-environment` (PEP 668) rather than saying what is actually wrong.
+
+If you prefer to drive it by hand, always name the interpreter:
+
+```bash
+./.venv/bin/python -m pip install -e ".[dev]"
+./.venv/bin/python -m pytest
+```
+
+Never a bare `pip` or `pytest`: with a venv active but empty, `pytest` falls through
+`PATH` to a system install and reports errors from an interpreter you never chose.
 
 ```bash
 # Chromium plus the Linux libraries it needs under WSL.
@@ -88,7 +97,7 @@ it exits non-zero if any claim in it fails.
 ## 3. See it
 
 ```bash
-python -m demo.run_demo --serve
+make serve
 ```
 
 Then, from **Windows**, open:
@@ -228,4 +237,5 @@ Deadline is **5PM EST on 11 November**.
 | apt: `nodejs : Conflicts: npm` | asked for `nodejs npm` together | drop `npm`; NodeSource's `nodejs` already includes it |
 | `does not appear to be a Python project` | the clone is on the old `main` | `git fetch origin && git checkout main && git pull` |
 | `No module named 'fastapi'` | `pip install -e ".[dev]"` has not run in this venv | run it; every entry point now says so instead of showing a traceback |
-| `pytest` errors mention `/usr/lib/python3.x` | a system `pytest` was found on `PATH` | use `python -m pytest` |
+| `pytest` errors mention `/usr/lib/python3.x` | a system `pytest` was found on `PATH` | use `make test`, or `./.venv/bin/python -m pytest` |
+| `error: externally-managed-environment` | the venv is not active in this shell (no `(.venv)` in the prompt) | `make install` — it never needs activation |
