@@ -622,14 +622,21 @@ def _operations(raw: Any, entity: Any, errors: _Errors, where: str, key: str) ->
 
 # ───────────────── JSON schema handed to the planning model ────────────────────
 
-def planner_json_schema() -> dict[str, Any]:
+def planner_json_schema(entity_refs: Optional[list[str]] = None) -> dict[str, Any]:
     """Structured-output schema for the planner.
+
+    Given the graph's entity refs, ``entity`` becomes an enumeration of them, so a
+    provider that enforces the schema cannot name an entity that does not exist — or
+    leave it blank, which is what small models do most often.
 
     Intentionally permissive about per-kind requirements — providers differ in how
     well they handle discriminated unions — because :func:`validate` is the real
     gate and its errors drive the repair pass.
     """
     scalar = {"type": ["string", "number", "boolean", "null"]}
+    entity: dict[str, Any] = {"type": "string", "maxLength": 80}
+    if entity_refs:
+        entity = {"type": "string", "enum": list(entity_refs)}
     return {
         "type": "object",
         "additionalProperties": False,
@@ -637,7 +644,7 @@ def planner_json_schema() -> dict[str, Any]:
         "properties": {
             "title": {"type": "string", "maxLength": 80},
             "summary": {"type": "string", "maxLength": 220},
-            "primary_entity": {"type": "string", "maxLength": 80},
+            "primary_entity": entity,
             "sections": {
                 "type": "array", "minItems": 1, "maxItems": MAX_SECTIONS,
                 "items": {
@@ -654,7 +661,7 @@ def planner_json_schema() -> dict[str, Any]:
                                     "kind": {"type": "string", "enum": list(BLOCK_KINDS)},
                                     "title": {"type": "string", "maxLength": 70},
                                     "description": {"type": "string", "maxLength": 180},
-                                    "entity": {"type": "string", "maxLength": 80},
+                                    "entity": entity,
                                     "span": {"type": "string", "enum": list(SPANS)},
                                     "aggregate": {"type": "string", "enum": list(AGGREGATES)},
                                     "field": {"type": "string", "maxLength": 60},

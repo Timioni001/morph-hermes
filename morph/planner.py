@@ -22,6 +22,7 @@ nothing it returns is executed.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -337,6 +338,7 @@ Hard rules:
 - Use ONLY entity refs, field names, enum values, relationship names and operation ids
   that appear in the capability graph. Inventing any of them makes the plan unusable.
 - `entity` is always "<application>.<entity>" exactly as given in `entities[].ref`.
+  Every block except a `workflow` block needs one; never leave it empty.
 - A filter's `op` must be listed in that entity's `filter_ops`; a filter on an enum
   field must use one of that field's listed `values`.
 - sum/avg/min/max need a numeric field (int, float, money). count needs no field.
@@ -379,6 +381,68 @@ def _model_input(goal: str, graph: CapabilityGraph, intent: Intent,
     return [{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}]
 
 
+MIN_SALVAGED_BLOCKS = 4
+_BLOCK_ERROR = re.compile(r"^sections\[(\d+)\]\.blocks\[(\d+)\]")
+
+
+def _block_count(parsed: Any) -> int:
+    return sum(len(section.get("blocks") or []) for section in parsed.get("sections") or []
+               if isinstance(section, dict))
+
+
+def _without_rejected_blocks(parsed: Any, errors: list[str]) -> Optional[dict[str, Any]]:
+    """The plan minus the blocks validation refused, or None if that cannot help.
+
+    Validation is unchanged and still decides what a workspace may contain. This only
+    stops one half-filled block from discarding the others: a block is either kept
+    exactly as the model wrote it or removed, never patched.
+    """
+    if not isinstance(parsed, dict):
+        return None
+    rejected: set[tuple[int, int]] = set()
+    for error in errors:
+        match = _BLOCK_ERROR.match(error)
+        if match is None:
+            return None            # a plan-level fault; pruning blocks would not fix it
+        rejected.add((int(match.group(1)), int(match.group(2))))
+    if not rejected:
+        return None
+    sections = []
+    for i, section in enumerate(parsed.get("sections") or []):
+        if not isinstance(section, dict):
+            return None
+        blocks = [block for j, block in enumerate(section.get("blocks") or [])
+                  if (i, j) not in rejected]
+        if blocks:
+            sections.append(dict(section, blocks=blocks))
+    return dict(parsed, sections=sections) if sections else None
+
+
+def _fill_unambiguous_entity(parsed: Any, graph: CapabilityGraph) -> Any:
+    """Give a block with no entity the only one it could mean.
+
+    Small models routinely leave ``entity`` blank on a block. When exactly one
+    entity is connected, or the plan itself names a valid ``primary_entity``, the
+    omission has one possible reading and rejecting the whole plan for it throws
+    away real model work. Anything ambiguous is left alone for validation to refuse.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    refs = sorted(graph.entities)
+    declared = str(parsed.get("primary_entity") or "")
+    only = declared if declared in graph.entities else (refs[0] if len(refs) == 1 else "")
+    if not only:
+        return parsed
+    if not declared:
+        parsed["primary_entity"] = only
+    for section in parsed.get("sections") or []:
+        for block in (section.get("blocks") if isinstance(section, dict) else None) or []:
+            if isinstance(block, dict) and block.get("kind") != "workflow" \
+                    and not block.get("entity"):
+                block["entity"] = only
+    return parsed
+
+
 def plan(goal: str, graph: CapabilityGraph, *, llm: Any = None,
          context: Optional[dict[str, Any]] = None, max_tokens: int = 2600,
          intent: Optional[Intent] = None) -> PlanResult:
@@ -396,7 +460,7 @@ def plan(goal: str, graph: CapabilityGraph, *, llm: Any = None,
                 result = llm.complete_structured(
                     instructions=INSTRUCTIONS,
                     input=_model_input(goal, graph, reading, context, errors),
-                    json_schema=planner_json_schema(),
+                    json_schema=planner_json_schema(sorted(graph.entities)),
                     schema_name="morph.ui.v1",
                     purpose=MODEL_PURPOSE,
                     temperature=0.1,
@@ -413,10 +477,24 @@ def plan(goal: str, graph: CapabilityGraph, *, llm: Any = None,
                 notes.append("the model returned no usable JSON")
                 continue
             try:
-                schema = validate(parsed, graph)
+                schema = validate(_fill_unambiguous_entity(parsed, graph), graph)
             except SchemaError as exc:
                 detail = exc.detail if isinstance(exc.detail, list) else [exc.message]
                 errors = [str(d) for d in detail]
+                salvaged = _without_rejected_blocks(parsed, errors)
+                if salvaged is not None:
+                    try:
+                        schema = validate(salvaged, graph)
+                    except SchemaError:
+                        schema = None
+                    if schema is not None and len(schema.blocks) >= MIN_SALVAGED_BLOCKS:
+                        dropped = _block_count(parsed) - len(schema.blocks)
+                        notes.append(f"{dropped} block(s) the model left incomplete were "
+                                     f"dropped; the rest of its plan is used as written")
+                        return PlanResult(schema=schema,
+                                          mode="model" if attempt == 0 else "model-repaired",
+                                          notes=notes, raw_plan=salvaged, model=model_name,
+                                          attempts=attempts, intent=reading)
                 notes.append(f"attempt {attempt + 1} rejected: {'; '.join(errors[:3])}")
                 continue
             return PlanResult(schema=schema,

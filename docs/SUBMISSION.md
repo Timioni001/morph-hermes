@@ -31,8 +31,8 @@ owner, with disclosures in the PR description.
 
 ## 2. The video
 
-`docs/DEMO_VIDEO.md` has the shot list. It needs a scratch GitHub repository with a
-few open issues and a `GITHUB_TOKEN` in your Hermes environment.
+The film is rendered to `video/film/out/`; `docs/DEMO_VIDEO.md` says how it was captured
+and how to rebuild it.
 
 ## 3. The form and the post
 

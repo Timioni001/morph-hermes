@@ -53,18 +53,35 @@ jobs:
   plugin:
     name: Hermes plugin validation
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      # Hermes is not installable from PyPI at the version MORPH targets (PyPI stops
+      # at 0.19, which has no `hermes plugins doctor`), and not with plain pip either:
+      # it ships its own locked Python toolchain. So this job does what Hermes's own
+      # catalog CI does — check out the exact release commit, with full history so the
+      # version resolves from the tags, and prepare it with Hermes's own setup action.
+      - name: Check out Hermes v0.23.0
+        uses: actions/checkout@v4
+        with:
+          repository: NousResearch/hermes-agent
+          ref: 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19   # v0.23.0
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out MORPH
+        uses: actions/checkout@v4
         with:
           path: morph
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - name: Prepare Hermes with its own locked toolchain
+        uses: ./.github/actions/setup-pm
         with:
-          python-version: "3.12"
-      - name: Install Hermes
-        run: pip install hermes-agent
+          toolchain: python
+          extras: '[]'
+      - name: The installed Hermes is the one the README names
+        run: hermes --version | tee /dev/stderr | grep -F "v0.23.0"
       - name: Plugin doctor
         working-directory: morph
         run: hermes plugins doctor . --ci
       - name: Plugin validate
         working-directory: morph
-        run: hermes plugins validate .
+        run: hermes plugins validate . --install-deps

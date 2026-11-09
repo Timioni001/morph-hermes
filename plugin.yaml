@@ -2,7 +2,8 @@ name: morph
 label: MORPH
 version: 1.0.0
 description: >-
-  An approval gate between the agent and the APIs it can write to. MORPH connects to a
+  One adaptive workspace across the applications you use, with human-approved,
+  verified actions: an approval gate between the agent and the APIs it can write to. MORPH connects to a
   GitHub repository or any service with an OpenAPI document, learns from the schema what
   can be read and what can be safely changed, and gives the agent tools to read and to
   propose. Writes are two-step: the agent may only propose, a human approves in the
