@@ -261,6 +261,33 @@ The long version is `docs/SECURITY.md`. The short version:
 - **Nothing is atomic across applications**, and MORPH never claims otherwise: a batch
   reports each item separately.
 
+## Disclosures
+
+Catalog rule 13 asks for what a user would want to know before installing. In full:
+
+- **Network calls to third-party services.** MORPH talks to whatever applications
+  you configure, over HTTP, and to `api.github.com` when a GitHub connector is
+  configured. It calls nothing else. Hosts are checked against an allowlist and
+  resolved addresses are re-validated at connect time, so a hostname that resolves
+  to a private or loopback address is refused unless you opted into loopback.
+- **Long-running background processes.** `hermes morph up` starts the three
+  demonstration applications bundled with MORPH, as child processes on loopback.
+  It starts nothing else, ever: an application MORPH did not ship is reported and
+  left alone. Without `--detach` they stop when you press Ctrl-C.
+- **Stored credentials.** Connector tokens are read through
+  `agent.secret_scope.get_secret`, which honours the active profile; outside
+  Hermes MORPH falls back to the process environment. MORPH never reads `.env`,
+  `auth.json` or any other credential store itself. `up` asks Hermes to store the
+  demonstration applications' generated tokens through the published
+  `save_env_values` helper; outside Hermes it stores nothing and prints the
+  variables for you to export.
+- **Reads outside its own data.** None. State lives in the plugin data directory
+  Hermes assigns.
+- **Telemetry.** None, of any kind.
+- **Writes to your systems.** Only through an operation you approve in the
+  dashboard, with the change re-read from the source afterwards to confirm it.
+  The agent cannot approve its own proposal.
+
 ## Running it on WSL
 
 `docs/WSL.md` is the exact command list, including installing into a real Hermes.

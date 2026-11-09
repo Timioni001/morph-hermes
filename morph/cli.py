@@ -317,12 +317,15 @@ def _up(args: Any, as_json: bool) -> int:  # noqa: C901 - one linear procedure
     plans = launch.survey()
     startable = [plan for plan in plans if plan.actionable]
 
-    written: list[str] = []
+    saved: list[str] = []
+    unsaved: list[str] = []
     if not getattr(args, "no_env", False):
-        written = launch.ensure_profile_env(exports)
+        saved, unsaved = launch.publish_tokens(exports)
 
+    detach = bool(getattr(args, "detach", False))
     children, late = launch.start(plans, host=getattr(args, "host", "127.0.0.1"),
-                                  timeout=float(getattr(args, "timeout", 25.0)))
+                                  timeout=float(getattr(args, "timeout", 25.0)),
+                                  detached=detach)
     after = launch.survey() if startable else plans
     live = [plan for plan in after if plan.state == launch.RUNNING]
 
@@ -335,18 +338,19 @@ def _up(args: Any, as_json: bool) -> int:  # noqa: C901 - one linear procedure
             "disabled": [plan.connector_id for plan in after
                          if plan.state == launch.DISABLED],
             "did_not_answer": late,
-            "env_written": written,
-            "detached": bool(getattr(args, "detach", False)),
+            "tokens_stored": saved,
+            "tokens_to_set": unsaved,
+            "detached": detach,
         }
         _out(payload, True)
     else:
-        for line in _up_text(after, startable, late, written):
+        for line in _up_text(after, startable, late, saved, unsaved, exports):
             print(line)
 
     if late:
         launch.stop(children)
         return 1
-    if not children or getattr(args, "detach", False):
+    if not children or detach:
         return 0
 
     print("\nCtrl-C to stop them.")
@@ -361,7 +365,8 @@ def _up(args: Any, as_json: bool) -> int:  # noqa: C901 - one linear procedure
 
 
 def _up_text(plans: list[Any], startable: list[Any], late: list[str],
-             written: list[str]) -> list[str]:
+             saved: list[str], unsaved: list[str],
+             exports: dict[str, str]) -> list[str]:
     lines = []
     for plan in plans:
         if plan.state == launch.RUNNING:
@@ -374,8 +379,13 @@ def _up_text(plans: list[Any], startable: list[Any], late: list[str],
             lines.append(f"  not mine {plan.label:<12} {plan.base_url}  — {plan.detail}")
     for connector_id in late:
         lines.append(f"  failed   {connector_id} did not answer in time")
-    if written:
-        lines.append(f"  wrote {', '.join(written)} to {launch.hermes_env_path()}")
+    if saved:
+        lines.append(f"  stored {', '.join(saved)} in the Hermes profile")
+    if unsaved:
+        lines.append("  set these before MORPH can authenticate "
+                     "(Hermes stores them for you when `up` runs inside it):")
+        for name in unsaved:
+            lines.append(f"    export {name}={exports[name]}")
     if not any(plan.state == launch.RUNNING for plan in plans):
         lines.append("Nothing is reachable. `hermes morph doctor` explains why.")
     else:

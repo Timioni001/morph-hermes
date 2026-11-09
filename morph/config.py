@@ -59,51 +59,14 @@ def data_dir() -> Path:
     return directory
 
 
-def _profile_env_value(name: str) -> str:
-    """Read one variable from the Hermes profile's ``.env``, re-reading on change.
-
-    Hermes loads that file when it starts, so a credential added afterwards — by
-    ``hermes morph up``, or by hand — is invisible to a Hermes that is already
-    running until it restarts. Consulting the file directly, last and only when
-    nothing else supplied the value, removes that restart from the path.
-    """
-    home = os.environ.get("HERMES_HOME") or "~/.hermes"
-    path = Path(home).expanduser() / ".env"
-    try:
-        stamp = path.stat().st_mtime_ns
-    except OSError:
-        return ""
-    cached = _profile_env_cache.get("stamp")
-    if cached != stamp:
-        values: dict[str, str] = {}
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:  # pragma: no cover - unreadable between stat and read
-            return ""
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            if ENV_NAME.match(key):
-                values[key] = value.strip().strip('"').strip("'")
-        _profile_env_cache.clear()
-        _profile_env_cache["stamp"] = stamp
-        _profile_env_cache["values"] = values
-    return str((_profile_env_cache.get("values") or {}).get(name, ""))
-
-
-_profile_env_cache: dict[str, Any] = {}
-
-
 def get_secret(name: str) -> str:
     """Read a credential by environment-variable name through Hermes when hosted.
 
-    In order: the active Hermes profile's secret scope, this process's environment,
-    then the profile's ``.env`` file. Each step is a fallback for the one before it
-    rather than an override of it, so a value an operator set explicitly always
-    wins over one a command generated.
+    The active Hermes profile's secret scope first, then this process's
+    environment when that is empty or unavailable. MORPH never reads ``.env``,
+    ``auth.json`` or any other credential store itself: catalog rule 11 reserves
+    that to Hermes, because a direct read can pick up another profile's key under
+    multiplexing.
     """
     if not ENV_NAME.match(name or ""):
         raise ConfigError(f"{name!r} is not a valid environment variable name")
@@ -113,8 +76,7 @@ def get_secret(name: str) -> str:
         value = hermes_secret(name, "") or ""
     except Exception:  # noqa: BLE001 - outside Hermes, or no scope bound
         value = ""
-    value = value.strip() or os.environ.get(name, "").strip()
-    return value or _profile_env_value(name).strip()
+    return value.strip() or os.environ.get(name, "").strip()
 
 
 # ─────────────────────────────── network policy ────────────────────────────────

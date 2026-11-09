@@ -26,14 +26,26 @@ def spec_of(name: str):
     return importlib.import_module(f"apps.{name}").SPEC
 
 
-def _child(name: str, host: str) -> subprocess.Popen:
+def _child(name: str, host: str, *, detached: bool = False) -> subprocess.Popen:
+    """Start one service.
+
+    ``detached`` is for a caller that returns while the service keeps running. It
+    closes the child's stdio and puts it in its own session, because a child that
+    inherits the terminal holds the pipe open after its parent exits — so
+    ``... | tee log`` hangs forever on a command that already finished.
+    """
     spec = spec_of(name)
     env = dict(os.environ)
     env.setdefault("PYTHONUNBUFFERED", "1")
+    extra: dict[str, object] = {}
+    if detached:
+        extra = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+                 "stderr": subprocess.DEVNULL, "start_new_session": True}
     return subprocess.Popen(
         [sys.executable, "-m", "uvicorn", f"apps.{name}:app",
          "--host", host, "--port", str(spec.port), "--log-level", "warning"],
         env=env, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        **extra,  # type: ignore[arg-type]
     )
 
 

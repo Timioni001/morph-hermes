@@ -155,10 +155,15 @@ authenticate the way they would against any real service:
 hermes morph up
 ```
 
-It only starts what is bundled with MORPH and running on loopback; anything else
-in your configuration — a SaaS API, a service another team runs — it reports and
-leaves alone. Run it again and it says `already up` rather than starting a second
-copy. `--detach` returns instead of holding the terminal.
+It only starts what is bundled with MORPH and configured on loopback; anything
+else — a SaaS API, a service another team runs — it reports and leaves alone. Run
+it again and it says `already up` rather than starting a second copy. `--detach`
+returns instead of holding the terminal.
+
+Inside Hermes it asks Hermes to store the generated tokens, so a dashboard that is
+already running picks them up. Run outside Hermes it stores nothing and prints the
+`export` lines instead — a plugin is not allowed to write to Hermes's credential
+store directly.
 
 ```bash
 hermes morph doctor             # configuration, reachability, credentials, storage

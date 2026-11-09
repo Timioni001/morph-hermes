@@ -102,28 +102,53 @@ def test_priming_installs_a_token_that_was_not_set(monkeypatch):
     assert os.environ["MORPH_STOREFRONT_TOKEN"] == loaded["MORPH_STOREFRONT_TOKEN"]
 
 
-def test_writing_the_profile_env_is_idempotent(tmp_path):
-    target = tmp_path / ".env"
-    first = launch.ensure_profile_env({"MORPH_A_TOKEN": "aaa", "MORPH_B_TOKEN": "bbb"}, target)
-    assert first == ["MORPH_A_TOKEN", "MORPH_B_TOKEN"]
-    again = launch.ensure_profile_env({"MORPH_A_TOKEN": "aaa", "MORPH_B_TOKEN": "bbb"}, target)
-    assert again == []
-    assert target.read_text().count("MORPH_A_TOKEN") == 1
+def test_tokens_are_never_written_to_a_file_outside_hermes(tmp_path, monkeypatch):
+    """Catalog rule 11: credential storage is Hermes's, not the plugin's.
+
+    Outside Hermes there is no published route, so `up` stores nothing anywhere
+    and hands the names back for the operator to export.
+    """
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    saved, unsaved = launch.publish_tokens({"MORPH_A_TOKEN": "aaa", "MORPH_B_TOKEN": "bbb"})
+    assert saved == []
+    assert unsaved == ["MORPH_A_TOKEN", "MORPH_B_TOKEN"]
+    assert not (tmp_path / ".env").exists()
+    assert list(tmp_path.iterdir()) == []
 
 
-def test_an_existing_value_is_never_rewritten(tmp_path):
-    """The name may already point at the operator's own service."""
-    target = tmp_path / ".env"
-    target.write_text("MORPH_A_TOKEN=theirs\n", encoding="utf-8")
-    written = launch.ensure_profile_env({"MORPH_A_TOKEN": "ours", "MORPH_B_TOKEN": "bbb"}, target)
-    assert written == ["MORPH_B_TOKEN"]
-    assert "MORPH_A_TOKEN=theirs" in target.read_text()
+def test_tokens_go_through_the_published_helper_inside_hermes(monkeypatch):
+    import sys
+    import types
+    calls: dict[str, str] = {}
+    module = types.ModuleType("hermes_cli.gateway_setup_wizard")
+    module.save_env_values = lambda **values: calls.update(values)   # type: ignore[attr-defined]
+    package = types.ModuleType("hermes_cli")
+    package.gateway_setup_wizard = module                            # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", package)
+    monkeypatch.setitem(sys.modules, "hermes_cli.gateway_setup_wizard", module)
+
+    saved, unsaved = launch.publish_tokens({"MORPH_A_TOKEN": "aaa"})
+    assert saved == ["MORPH_A_TOKEN"]
+    assert unsaved == []
+    assert calls == {"MORPH_A_TOKEN": "aaa"}
 
 
-def test_the_profile_env_file_is_not_world_readable(tmp_path):
-    target = tmp_path / ".env"
-    launch.ensure_profile_env({"MORPH_A_TOKEN": "aaa"}, target)
-    assert target.stat().st_mode & 0o077 == 0
+def test_a_refusal_from_hermes_falls_back_to_telling_the_operator(monkeypatch):
+    import sys
+    import types
+
+    def refuse(**_values):
+        raise RuntimeError("no gateway configured")
+
+    module = types.ModuleType("hermes_cli.gateway_setup_wizard")
+    module.save_env_values = refuse                                  # type: ignore[attr-defined]
+    package = types.ModuleType("hermes_cli")
+    package.gateway_setup_wizard = module                            # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", package)
+    monkeypatch.setitem(sys.modules, "hermes_cli.gateway_setup_wizard", module)
+
+    saved, unsaved = launch.publish_tokens({"MORPH_A_TOKEN": "aaa"})
+    assert (saved, unsaved) == ([], ["MORPH_A_TOKEN"])
 
 
 def test_a_bound_port_is_reported_as_taken():
@@ -134,41 +159,3 @@ def test_a_bound_port_is_reported_as_taken():
         port = held.getsockname()[1]
         assert not launch.port_is_free("127.0.0.1", port)
     assert launch.port_is_free("127.0.0.1", port)
-
-
-# ───────────────────────── credentials reach a running Hermes ──────────────────
-
-def test_a_credential_added_after_hermes_started_is_still_found(tmp_path, monkeypatch):
-    """`up` writes the profile env; a Hermes already running never re-read it."""
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    monkeypatch.delenv("MORPH_STOREFRONT_TOKEN", raising=False)
-    assert get_secret("MORPH_STOREFRONT_TOKEN") == ""
-    (tmp_path / ".env").write_text("MORPH_STOREFRONT_TOKEN=from-the-file\n", encoding="utf-8")
-    assert get_secret("MORPH_STOREFRONT_TOKEN") == "from-the-file"
-
-
-def test_the_process_environment_outranks_the_profile_file(tmp_path, monkeypatch):
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    (tmp_path / ".env").write_text("MORPH_STOREFRONT_TOKEN=from-the-file\n", encoding="utf-8")
-    monkeypatch.setenv("MORPH_STOREFRONT_TOKEN", "from-the-environment")
-    assert get_secret("MORPH_STOREFRONT_TOKEN") == "from-the-environment"
-
-
-def test_the_profile_file_is_re_read_when_it_changes(tmp_path, monkeypatch):
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    monkeypatch.delenv("MORPH_STOREFRONT_TOKEN", raising=False)
-    target = tmp_path / ".env"
-    target.write_text("MORPH_STOREFRONT_TOKEN=first\n", encoding="utf-8")
-    assert get_secret("MORPH_STOREFRONT_TOKEN") == "first"
-    import os
-    target.write_text("MORPH_STOREFRONT_TOKEN=second\n", encoding="utf-8")
-    os.utime(target, (0, 0))          # force a distinct mtime, not a same-nanosecond write
-    assert get_secret("MORPH_STOREFRONT_TOKEN") == "second"
-
-
-def test_a_comment_or_blank_line_in_the_profile_file_is_ignored(tmp_path, monkeypatch):
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    monkeypatch.delenv("MORPH_STOREFRONT_TOKEN", raising=False)
-    (tmp_path / ".env").write_text(
-        "# a comment\n\n  \nMORPH_STOREFRONT_TOKEN=\"quoted\"\nnot a pair\n", encoding="utf-8")
-    assert get_secret("MORPH_STOREFRONT_TOKEN") == "quoted"

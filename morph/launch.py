@@ -184,47 +184,33 @@ def port_is_free(host: str, port: int) -> bool:
             return False
 
 
-def hermes_env_path() -> Path:
-    home = os.environ.get("HERMES_HOME") or "~/.hermes"
-    return Path(home).expanduser() / ".env"
+def publish_tokens(exports: dict[str, str]) -> tuple[list[str], list[str]]:
+    """Hand the generated tokens to Hermes, or report the lines to set by hand.
 
+    Catalog rule 11 reserves credential storage to Hermes: a plugin never writes
+    into — or reads from — ``.env``, ``auth.json`` or any other credential store
+    itself. ``hermes_cli.gateway_setup_wizard.save_env_values`` is the published
+    route, so inside Hermes the tokens go through it and a dashboard that is
+    already running picks them up.
 
-def ensure_profile_env(exports: dict[str, str], path: Optional[Path] = None) -> list[str]:
-    """Add any missing ``VAR=token`` line to the Hermes profile environment.
-
-    Returns the names actually written. A variable already present is left exactly
-    as it is: the user may have pointed MORPH at their own service with the same
-    variable name, and silently overwriting that would be a surprise at best.
+    Returns ``(saved, unsaved)``. Outside Hermes nothing is written anywhere and
+    every name comes back as unsaved, for the caller to print.
     """
     if not exports:
-        return []
-    target = path or hermes_env_path()
-    existing = ""
-    if target.exists():
-        existing = target.read_text(encoding="utf-8")
-    present = {line.split("=", 1)[0].strip()
-               for line in existing.splitlines() if "=" in line and not line.startswith("#")}
-    missing = {name: value for name, value in exports.items() if name not in present}
-    if not missing:
-        return []
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    block = "".join(f"{name}={value}\n" for name, value in sorted(missing.items()))
-    prefix = "" if (not existing or existing.endswith("\n")) else "\n"
-    with target.open("a", encoding="utf-8") as handle:
-        if not existing:
-            handle.write("# Added by `hermes morph up` — bearer tokens for the "
-                         "bundled demonstration applications.\n")
-        handle.write(prefix + block)
+        return [], []
     try:
-        target.chmod(0o600)
-    except OSError:  # pragma: no cover - filesystem without chmod
-        pass
-    return sorted(missing)
+        from hermes_cli.gateway_setup_wizard import save_env_values  # published helper
+    except Exception:  # noqa: BLE001 - not running inside Hermes
+        return [], sorted(exports)
+    try:
+        save_env_values(**exports)
+    except Exception:  # noqa: BLE001 - Hermes declined to store them
+        return [], sorted(exports)
+    return sorted(exports), []
 
 
-def start(plans: list[Plan], host: str = "127.0.0.1",
-          timeout: float = 25.0) -> tuple[list[Any], list[str]]:
+def start(plans: list[Plan], host: str = "127.0.0.1", timeout: float = 25.0,
+          detached: bool = False) -> tuple[list[Any], list[str]]:
     """Spawn the startable applications and wait for them to answer.
 
     Returns the child processes and the ids that did not become ready in time.
@@ -244,7 +230,8 @@ def start(plans: list[Plan], host: str = "127.0.0.1",
             # on bind and leave a corpse, so treat it as somebody else's.
             occupied.append(plan.connector_id)
             continue
-        children.append((plan.connector_id, app_serve._child(plan.service, host)))
+        children.append((plan.connector_id,
+                         app_serve._child(plan.service, host, detached=detached)))
     startable = [plan for plan in startable if plan.connector_id not in occupied]
     if not children:
         return [], []
