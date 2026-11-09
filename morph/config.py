@@ -290,8 +290,14 @@ def _connectors(raw: Any, allow_loopback: bool, allowed_hosts: tuple[str, ...]) 
             raise ConfigError(f"duplicate connector id {cid!r}")
         seen.add(cid)
         kind = str(item.get("kind") or "http-rest")
-        if kind not in ("http-rest", "memory", "github"):
-            raise ConfigError(f"connector {cid!r}: unsupported kind {kind!r}")
+        # Imported here, not at module scope: the connectors import this module.
+        # Asking the registry rather than repeating its names means a new adapter
+        # is usable the moment it is registered, instead of being rejected by a
+        # list someone forgot to update.
+        from morph.connectors import KINDS
+        if kind not in KINDS:
+            raise ConfigError(f"connector {cid!r}: unsupported kind {kind!r}; "
+                              f"this build has {', '.join(sorted(KINDS))}")
         token_env = str(item.get("token_env") or "")
         if token_env and not ENV_NAME.match(token_env):
             raise ConfigError(f"connector {cid!r}: token_env must be UPPER_SNAKE_CASE")

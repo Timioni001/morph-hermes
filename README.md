@@ -73,6 +73,19 @@ A `readOnly` field, an identifier and a version field never become operations at
 The result is a vocabulary a person can read instead of one "update this record" verb
 that could do anything.
 
+Run it against a real third-party API yourself — public, no account, no key:
+
+```bash
+python scripts/check_openapi_connector.py
+```
+
+That reads the Swagger Petstore, which is nobody's idea of a tidy REST API, and that is
+the point. It has no `GET /pet`, so the listing is found by matching the response schema
+instead (`/pet/findByStatus`), and its update is a `PUT` on the collection rather than
+the record — so MORPH reads 44 live pets and offers **no operations at all**, because
+nothing there can be changed in a way it could verify afterwards. Declining is the
+feature.
+
 The **GitHub connector** is the other end of the range — an adapter written by hand
 against an API nobody controls. GitHub publishes no MORPH schema, no version field, no
 idempotency header and no change feed in the shape MORPH asks for, and it still slots in
@@ -346,6 +359,9 @@ things for a suite that executes and a contract that was read.
 - The GitHub connector against the real GitHub API: authenticated, schema introspected
   from live data, the change feed run twice, a workspace composed, and a proposal built
   then rejected without writing anything.
+- The OpenAPI adapter against the public Swagger Petstore: the document read, one entity
+  derived, its listing endpoint found by schema, 44 live records listed and one read back
+  — reproducible with `python scripts/check_openapi_connector.py`.
 - `hermes plugins doctor . --ci` and `hermes plugins validate .` against the Hermes CLI
   built from a clone of `hermes-agent` — security scan clean, validation passed.
 

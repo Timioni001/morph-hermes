@@ -229,6 +229,86 @@ def test_a_read_only_entity_offers_no_operations(monkeypatch, service):
     assert job.writable is False
 
 
+# ──────────────────────── finding the listing endpoint ────────────────────────
+
+PETSTORE_SHAPED = {
+    "openapi": "3.0.3", "info": {"title": "Petstore"},
+    "components": {"schemas": {"Pet": {"type": "object", "properties": {
+        "id": {"type": "integer"}, "name": {"type": "string"}}}}},
+    "paths": {
+        # No `GET /pet` at all — the listing lives under a verb path, with a
+        # parameter the document gives a default for.
+        "/pet/findByStatus": {"get": {
+            "parameters": [{"name": "status", "in": "query", "required": False,
+                            "schema": {"type": "string", "default": "available"}}],
+            "responses": {"200": {"description": "many", "content": {"application/json": {
+                "schema": {"type": "array",
+                           "items": {"$ref": "#/components/schemas/Pet"}}}}}}}},
+        "/pet/{petId}": {"get": {"responses": {"200": {"description": "one", "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/Pet"}}}}}}},
+    },
+}
+
+
+def _connector_for(monkeypatch, spec, records=None):
+    class Service:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, url, params=None, json=None, headers=None):  # noqa: A002
+            self.calls.append((method, url, params))
+            if url.endswith("/openapi.json"):
+                return FakeResponse(200, spec)
+            return FakeResponse(200, records if records is not None else [])
+
+    service = Service()
+    monkeypatch.setattr(OpenApiConnector, "_get_client", lambda self: service)
+    monkeypatch.setattr(OpenApiConnector, "_checked_base", lambda self: "https://api.example.com")
+    connector = OpenApiConnector(ConnectorConfig(
+        id="petstore", kind="openapi", label="Petstore",
+        base_url="https://api.example.com", token_env=""))
+    return connector, service
+
+
+def test_a_listing_is_found_by_schema_when_the_path_is_not_the_convention(monkeypatch):
+    """The Swagger Petstore lists pets at /pet/findByStatus and has no GET /pet."""
+    connector, _service = _connector_for(monkeypatch, PETSTORE_SHAPED)
+    assert [e.name for e in connector.describe().entities] == ["pet"]
+    assert connector._routes["pet"][0] == "/pet/findByStatus"
+
+
+def test_the_defaults_the_document_declares_are_sent(monkeypatch):
+    """A declared default is not a promise the server applies it: Petstore 400s."""
+    connector, service = _connector_for(monkeypatch, PETSTORE_SHAPED, records=[])
+    connector.fetch("pet")
+    listing = [c for c in service.calls if "findByStatus" in c[1]][0]
+    assert listing[2] == {"status": "available"}
+
+
+def test_a_listing_of_a_different_schema_is_not_paired_with_these_records(monkeypatch):
+    """Matching on path prefix alone would pair /pet/categories with pets."""
+    spec = json.loads(json.dumps(PETSTORE_SHAPED))
+    spec["components"]["schemas"]["Category"] = {"type": "object", "properties": {
+        "id": {"type": "integer"}, "label": {"type": "string"}}}
+    del spec["paths"]["/pet/findByStatus"]
+    spec["paths"]["/pet/categories"] = {"get": {"responses": {"200": {
+        "description": "many", "content": {"application/json": {"schema": {
+            "type": "array", "items": {"$ref": "#/components/schemas/Category"}}}}}}}}
+    connector, _service = _connector_for(monkeypatch, spec)
+    with pytest.raises(ConnectorError, match="collection"):
+        connector.describe()
+
+
+def test_a_listing_needing_a_parameter_with_no_default_is_not_used(monkeypatch):
+    """MORPH would have nothing to send, so it is not a listing MORPH can call."""
+    spec = json.loads(json.dumps(PETSTORE_SHAPED))
+    spec["paths"]["/pet/findByStatus"]["get"]["parameters"][0] = {
+        "name": "status", "in": "query", "required": True, "schema": {"type": "string"}}
+    connector, _service = _connector_for(monkeypatch, spec)
+    with pytest.raises(ConnectorError, match="collection"):
+        connector.describe()
+
+
 # ───────────────────────────────── reading ─────────────────────────────────────
 
 def test_records_are_unwrapped_from_whatever_envelope_the_service_uses(connector):

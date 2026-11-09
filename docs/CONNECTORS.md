@@ -145,6 +145,40 @@ there. Entities from the collection paths, fields from the record schema (follow
 
 `options` also takes `entities` (expose only these) and `exclude` (expose all but these).
 
+### Worked example: the Swagger Petstore
+
+```bash
+python scripts/check_openapi_connector.py
+```
+
+```
+  ── pet  (key id, titled by name)
+     list /pet/findByStatus   record /pet/{petId}   write none
+         id                  id
+         name                string
+         status              enum        ['available', 'pending', 'sold']
+     operations: none. Nothing here can be changed in a way MORPH
+     could verify by re-reading the record afterwards.
+     5 of 44 record(s)
+```
+
+Three things happened there, and the third is the interesting one.
+
+The Petstore has **no `GET /pet`**. The listing was found by looking for a GET under
+`/pet` whose 200 response is an array of the same `$ref` the single-record GET returns —
+`/pet/findByStatus` — and the `status` parameter was sent with the default the document
+declares. (The document says that default is optional. The live server answers `400`
+without it. Sending what the document declares is what any client reading it would do.)
+
+`category`, `photoUrls` and `tags` are **absent from the fields**, because they are
+nested objects and arrays, and MORPH's record model is flat.
+
+And there are **no operations**, because the Petstore's update is `PUT /pet` with a whole
+pet at the collection, not a change to one record at `/pet/{petId}`. MORPH cannot state
+in advance what such a call will leave behind, so it cannot verify it afterwards, so it
+does not offer it. An adapter that invented `update_pet` here would be the kind of thing
+that looks good in a demo and loses someone's data in production.
+
 ### What it will not do
 
 - **Nested values are not fields.** MORPH's record model is flat, and a nested object

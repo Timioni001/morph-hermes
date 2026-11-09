@@ -11,6 +11,26 @@ from morph.connectors import KINDS, Connector, Predicate
 from morph.errors import ConfigError, NotFound, StaleRecord
 
 
+def test_configuration_accepts_exactly_the_kinds_that_are_registered():
+    """A second list of kinds in the validator drifts the moment one is added."""
+    import json as _json
+    import os
+
+    from morph.connectors import KINDS
+    for kind in KINDS:
+        raw = {"connectors": [{"id": "probe", "kind": kind, "label": "Probe",
+                               "base_url": "http://127.0.0.1:8899"}],
+               "links": [], "default_role": "operator",
+               "allow_loopback": True, "allowed_hosts": ["127.0.0.1"]}
+        os.environ["MORPH_CONFIG"] = _json.dumps(raw)
+        reload_settings()
+        try:
+            assert settings().connectors[0].kind == kind, kind
+        finally:
+            os.environ.pop("MORPH_CONFIG", None)
+            reload_settings()
+
+
 def test_every_registered_kind_implements_the_whole_contract():
     required = {"describe", "health", "fetch", "get", "apply"}
     for name, klass in KINDS.items():

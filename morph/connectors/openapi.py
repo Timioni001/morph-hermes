@@ -89,8 +89,10 @@ class OpenApiConnector(HttpRestConnector):
         self._only = tuple(str(x) for x in (options.get("entities") or ()))
         self._skip = {str(x) for x in (options.get("exclude") or ())}
         self._max_records = int(options.get("max_records") or 200)
-        # entity name → (collection path, item path, write method, id parameter)
+        # entity name → (listing path, item path, write method, id parameter)
         self._routes: dict[str, tuple[str, str, str, str]] = {}
+        # entity name → query parameters the listing declares a default for
+        self._list_params: dict[str, dict[str, Any]] = {}
 
     # ─────────────────────────────── schema ───────────────────────────────
 
@@ -118,16 +120,16 @@ class OpenApiConnector(HttpRestConnector):
 
         entities: list[EntityDescriptor] = []
         self._routes = {}
+        self._list_params = {}
         for item_path, item_ops in sorted(paths.items()):
             match = ITEM_PATH.match(str(item_path))
-            if not match:
-                continue
+            if not match or not isinstance(item_ops, dict) or "get" not in item_ops:
+                continue      # a record you cannot read on its own cannot be verified
             collection = "/" + match.group("collection")
-            listing = paths.get(collection)
-            if not isinstance(listing, dict) or not isinstance(item_ops, dict):
-                continue
-            if "get" not in listing or "get" not in item_ops:
-                continue      # a collection you cannot list, or a record you cannot read
+            found = self._find_listing(document, paths, collection, item_ops.get("get"))
+            if found is None:
+                continue      # records you cannot list: no table, so no entity
+            list_path, listing = found
 
             name = _slug(match.group("collection").rsplit("/", 1)[-1])
             if not NAME.match(name) or name in self._skip:
@@ -139,8 +141,9 @@ class OpenApiConnector(HttpRestConnector):
             if entity is None:
                 continue
             write_method = "patch" if "patch" in item_ops else ("put" if "put" in item_ops else "")
-            self._routes[name] = (collection, str(item_path), write_method,
+            self._routes[name] = (list_path, str(item_path), write_method,
                                   match.group("param"))
+            self._list_params[name] = self._declared_defaults(listing.get("get"))
             entities.append(entity)
             if len(entities) >= MAX_ENTITIES:
                 break
@@ -191,6 +194,117 @@ class OpenApiConnector(HttpRestConnector):
             # every predicate is evaluated here rather than pushed down.
             filter_ops=(), sortable=True, paginated=False,
             max_page_size=self._max_records)
+
+    def _find_listing(self, document: dict[str, Any], paths: dict[str, Any],
+                      collection: str, item_get: Any) -> Optional[tuple[str, dict[str, Any]]]:
+        """The GET that lists these records, matched by schema rather than by path.
+
+        ``GET /things`` is the convention, but plenty of real APIs put the listing
+        somewhere else — the Swagger Petstore lists pets at ``/pet/findByStatus``
+        and has no ``GET /pet`` at all. Insisting on the convention would refuse
+        half the APIs in the world over a naming choice.
+
+        So: any GET under the collection whose 200 response is an array of the
+        same schema the single-record GET returns. Identity comes from the
+        document's own ``$ref``, so this cannot be fooled into pairing one
+        collection's listing with another's records. A candidate whose required
+        parameters have no defaults is skipped — MORPH would have nothing to send.
+        """
+        item_ref = self._response_ref(item_get)
+        candidates = [collection] + sorted(
+            key for key in paths
+            if isinstance(key, str) and key.startswith(collection + "/") and "{" not in key)
+        for key in candidates:
+            operation = (paths.get(key) or {}).get("get") if isinstance(paths.get(key), dict) else None
+            if not isinstance(operation, dict):
+                continue
+            if not self._parameters_are_optional(operation):
+                continue
+            listed = self._list_item_ref(operation)
+            if item_ref and listed and listed != item_ref:
+                continue
+            if not item_ref or not listed:
+                # One side names no schema: fall back to structural agreement.
+                shape = self._item_of(document, self._response_schema(document, operation))
+                item_shape = self._response_schema(document, item_get)
+                if not (shape.get("properties") and item_shape.get("properties")):
+                    if key != collection:
+                        continue
+                elif set(shape["properties"]) != set(item_shape["properties"]):
+                    continue
+            return key, {"get": operation}
+        return None
+
+    @staticmethod
+    def _declared_defaults(operation: Any) -> dict[str, Any]:
+        """Query parameters the document gives a default for.
+
+        A default in the document is not a promise that the server applies it —
+        the Swagger Petstore declares one for ``status`` on ``/pet/findByStatus``
+        and still answers 400 when it is missing. Sending what the document says
+        costs nothing and is what a client reading that document would do.
+        """
+        sent: dict[str, Any] = {}
+        if not isinstance(operation, dict):
+            return sent
+        for parameter in operation.get("parameters") or []:
+            if not isinstance(parameter, dict) or parameter.get("in") != "query":
+                continue
+            schema = parameter.get("schema")
+            name = parameter.get("name")
+            if isinstance(schema, dict) and "default" in schema and isinstance(name, str):
+                sent[name] = schema["default"]
+        return sent
+
+    @staticmethod
+    def _parameters_are_optional(operation: dict[str, Any]) -> bool:
+        for parameter in operation.get("parameters") or []:
+            if not isinstance(parameter, dict) or not parameter.get("required"):
+                continue
+            schema = parameter.get("schema")
+            if not (isinstance(schema, dict) and "default" in schema):
+                return False
+        return True
+
+    @staticmethod
+    def _response_ref(operation: Any) -> str:
+        """The raw ``$ref`` a 200 response names, before resolution."""
+        if not isinstance(operation, dict):
+            return ""
+        for code in ("200", "201", 200, 201):
+            entry = (operation.get("responses") or {}).get(code)
+            if isinstance(entry, dict):
+                body = (entry.get("content") or {}).get("application/json")
+                if isinstance(body, dict) and isinstance(body.get("schema"), dict):
+                    ref = body["schema"].get("$ref")
+                    return str(ref) if isinstance(ref, str) else ""
+        return ""
+
+    @staticmethod
+    def _list_item_ref(operation: Any) -> str:
+        """The raw ``$ref`` of the items in a 200 array response."""
+        if not isinstance(operation, dict):
+            return ""
+        for code in ("200", 200):
+            entry = (operation.get("responses") or {}).get(code)
+            if not isinstance(entry, dict):
+                continue
+            body = (entry.get("content") or {}).get("application/json")
+            schema = body.get("schema") if isinstance(body, dict) else None
+            if not isinstance(schema, dict):
+                continue
+            if schema.get("type") == "array" and isinstance(schema.get("items"), dict):
+                ref = schema["items"].get("$ref")
+                return str(ref) if isinstance(ref, str) else ""
+            properties = schema.get("properties")
+            if isinstance(properties, dict):
+                for key in ("items", "records", "data", "results"):
+                    nested = properties.get(key)
+                    if isinstance(nested, dict) and nested.get("type") == "array" \
+                            and isinstance(nested.get("items"), dict):
+                        ref = nested["items"].get("$ref")
+                        return str(ref) if isinstance(ref, str) else ""
+        return ""
 
     # ───────────────────────────── schema helpers ─────────────────────────
 
@@ -392,8 +506,9 @@ class OpenApiConnector(HttpRestConnector):
     def fetch(self, entity: str, *, filters: Sequence[Predicate] = (), limit: int = 100,
               offset: int = 0, order_by: str = "", descending: bool = False) -> FetchResult:
         described = self.entity_or_raise(entity)
-        collection, _item, _method, _param = self._route(entity)
-        status, payload = self._request("GET", collection)
+        listing, _item, _method, _param = self._route(entity)
+        status, payload = self._request("GET", listing,
+                                        params=self._list_params.get(entity) or None)
         if status != 200:
             raise ConnectorError(f"{self.id!r} returned HTTP {status} listing {entity}")
 
