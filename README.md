@@ -262,16 +262,57 @@ The long version is `docs/SECURITY.md`. The short version:
 
 ## Running it on WSL
 
-`docs/WSL.md` is the exact command list, including the one check the cloud build could
-not run: `hermes dashboard` with the MORPH tab inside the real Hermes web app.
+`docs/WSL.md` is the exact command list, including installing into a real Hermes.
+
+## What has been run, and what has not
+
+Claims below are split by how they were checked, because "it works" means different
+things for a suite that executes and a contract that was read.
+
+**Run, and passing**
+
+- Three applications, each with its own SQLite database, its own bearer token and its
+  own HTTP API, started as independent processes.
+- 176 Python tests: unit, integration against those running services, and security.
+- 39 browser checks in Chromium, driving the committed bundle against the live API,
+  including two mobile viewports.
+- `demo/run_demo.py` end to end: discovery, composition from a goal, the agent
+  proposing, the agent **refused** when it tries to approve, a human approving, the
+  write applied with `If-Match` and an idempotency key, the record re-read from the
+  owning application's own API, and the hash-chained audit log verified. It exits
+  non-zero if any step does not hold.
+- The GitHub connector against the real GitHub API: authenticated, schema introspected
+  from live data, the change feed run twice, a workspace composed, and a proposal built
+  then rejected without writing anything.
+- `hermes plugins doctor . --ci` and `hermes plugins validate .` against the Hermes CLI
+  built from a clone of `hermes-agent` — security scan clean, validation passed.
+
+**Implemented against the published contract, not observed in a live install**
+
+- *The dashboard tab.* The browser suite drives the real bundle through a harness that
+  implements the documented Hermes dashboard SDK — `window.__HERMES_PLUGIN_SDK__`,
+  `window.__HERMES_PLUGINS__.register()`, and the plugin router mounted at
+  `/api/plugins/morph/`. The plugin has not been rendered inside the Hermes web app
+  itself. Every machine available for this build was short of the disk and memory a
+  full Hermes install needs.
+- *Model-backed planning.* `plan()` calls `ctx.llm.complete_structured`, validates the
+  result against `morph.ui.v1`, repairs once on failure, and falls back to the
+  deterministic composer. Every run recorded here reports `deterministic`, because no
+  host model was configured. Five tests exercise the model path with a stub LLM —
+  schema-only prompting, one repair attempt, and three distinct failure modes falling
+  back rather than erroring — but it has not been watched against a live model.
+
+**Not exercised against live data**
+
+- GitHub issue reads. The connector authenticated and introspected against a real
+  repository, but that repository had no open issues, so listing, reading and change
+  detection are covered by 15 tests with a recorded transport rather than live traffic.
 
 ## Limitations
 
 - Per-user roles come from the dashboard session identity Hermes provides; with the
   dashboard on loopback and no auth gate engaged, every local caller is the configured
   default operator. Map identities to roles under `user_roles` when running with auth.
-- The browser suite drives MORPH's real bundle and real API through a harness that
-  implements the documented Hermes dashboard SDK. It is not the Hermes dashboard itself.
 - The bundled applications are demonstration systems. They are real services with real
   databases and real HTTP APIs, which is what makes the integration demonstrable — they
   are not a storefront. The GitHub connector talks to the real GitHub API; it is driven
