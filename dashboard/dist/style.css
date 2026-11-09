@@ -1,6 +1,8 @@
 /* MORPH dashboard styling.
  *
- * White-dominant with one restrained blue accent, tabular numerals on anything
+ * White-dominant monochrome: a near-black accent on a neutral grey scale with no
+ * colour cast, so hierarchy comes from fill and weight rather than hue. Tabular
+ * numerals on anything
  * countable, hairline borders, and spacing on a 4px rhythm. Everything is scoped
  * under .morph so the plugin can never restyle the host dashboard around it.
  *
@@ -13,19 +15,32 @@
  */
 
 .morph {
-  --mo-ink: #0b1220;
-  --mo-ink-2: #39435a;
-  --mo-ink-3: #68728a;
-  --mo-ink-4: #98a1b4;
-  --mo-line: #e6eaf2;
-  --mo-line-2: #f0f3f8;
+  --mo-ink: #101113;
+  --mo-ink-2: #3e4147;
+  --mo-ink-3: #6a6e76;
+  --mo-ink-4: #9a9ea6;
+  --mo-line: #e6e7ea;
+  --mo-line-2: #f1f1f3;
   --mo-bg: #ffffff;
-  --mo-bg-2: #fafbfd;
-  --mo-bg-3: #f4f6fa;
-  --mo-accent: #1d4ed8;
-  --mo-accent-ink: #1740b5;
-  --mo-accent-soft: #eef2ff;
-  --mo-accent-line: #c9d6fb;
+  --mo-bg-2: #fafafb;
+  --mo-bg-3: #f4f4f6;
+  --mo-accent: #101113;
+  --mo-accent-2: #3a3d44;
+  --mo-accent-ink: #000000;
+  --mo-accent-on: #ffffff;
+  --mo-accent-soft: #eeeef1;
+  --mo-accent-line: #d5d7dc;
+  --mo-accent-glow: rgba(16, 17, 19, .34);
+  /* Categorical ramp for charts. Monochrome by design: slices carry a labelled
+     swatch, so lightness steps identify them without relying on hue. */
+  --mo-c1: #101113;
+  --mo-c2: #2e3137;
+  --mo-c3: #4c5056;
+  --mo-c4: #6a6e75;
+  --mo-c5: #878b93;
+  --mo-c6: #a5a9b0;
+  --mo-c7: #c3c6cc;
+  --mo-c8: #dfe1e5;
   --mo-good: #047857;
   --mo-good-soft: #ecfdf5;
   --mo-good-line: #c3e9d8;
@@ -38,8 +53,8 @@
   --mo-radius: 16px;
   --mo-radius-sm: 11px;
   --mo-radius-xs: 8px;
-  --mo-shadow: 0 1px 2px rgba(11, 18, 32, .04), 0 10px 28px -20px rgba(11, 18, 32, .22);
-  --mo-shadow-lift: 0 1px 2px rgba(11, 18, 32, .06), 0 22px 48px -26px rgba(11, 18, 32, .32);
+  --mo-shadow: 0 1px 2px rgba(16, 17, 19, .04), 0 10px 28px -20px rgba(16, 17, 19, .22);
+  --mo-shadow-lift: 0 1px 2px rgba(16, 17, 19, .06), 0 22px 48px -26px rgba(16, 17, 19, .32);
   --mo-ease: cubic-bezier(.22, .61, .36, 1);
   --mo-rail: 68px;
 
@@ -53,19 +68,32 @@
 
 @media (prefers-color-scheme: dark) {
   .morph:not([data-mo-theme="light"]) {
-    --mo-ink: #f2f5fa;
-    --mo-ink-2: #c3cada;
-    --mo-ink-3: #939cb0;
-    --mo-ink-4: #6f7891;
-    --mo-line: #242b3a;
-    --mo-line-2: #1c222e;
-    --mo-bg: #0d1017;
-    --mo-bg-2: #12161f;
-    --mo-bg-3: #171c27;
-    --mo-accent: #6f96ff;
-    --mo-accent-ink: #9ab4ff;
-    --mo-accent-soft: #161d33;
-    --mo-accent-line: #2c3a5e;
+    --mo-ink: #f3f3f5;
+    --mo-ink-2: #c5c7cc;
+    --mo-ink-3: #93969d;
+    --mo-ink-4: #6f7279;
+    --mo-line: #272930;
+    --mo-line-2: #1d1f25;
+    --mo-bg: #0e0f12;
+    --mo-bg-2: #141519;
+    --mo-bg-3: #1a1b20;
+    /* The accent inverts to near-white so a filled control stays the brightest
+       thing on the surface; --mo-accent-on inverts with it. */
+    --mo-accent: #ededf0;
+    --mo-accent-2: #b7bac1;
+    --mo-accent-ink: #ffffff;
+    --mo-accent-on: #0e0f12;
+    --mo-accent-soft: #1e2026;
+    --mo-accent-line: #343741;
+    --mo-accent-glow: rgba(0, 0, 0, .66);
+    --mo-c1: #f0f1f3;
+    --mo-c2: #d2d4d9;
+    --mo-c3: #b4b7be;
+    --mo-c4: #9699a1;
+    --mo-c5: #797d85;
+    --mo-c6: #5e626a;
+    --mo-c7: #474a52;
+    --mo-c8: #33363d;
     --mo-good: #4ade9f;
     --mo-good-soft: #10231c;
     --mo-good-line: #1f4336;
@@ -109,9 +137,9 @@
 
 .mo-mark {
   width: 36px; height: 36px; flex: none; border-radius: 11px;
-  background: linear-gradient(140deg, var(--mo-accent), #5b86ff);
-  color: #fff; display: grid; place-items: center; margin-bottom: 10px;
-  box-shadow: 0 6px 18px -8px rgba(29, 78, 216, .75);
+  background: linear-gradient(140deg, var(--mo-accent), var(--mo-accent-2));
+  color: var(--mo-accent-on); display: grid; place-items: center; margin-bottom: 10px;
+  box-shadow: 0 6px 18px -8px var(--mo-accent-glow);
 }
 
 .mo-rail-btn {
@@ -181,8 +209,8 @@
 .mo-btn:active:not(:disabled) { transform: translateY(1px); }
 .mo-btn:disabled { opacity: .45; cursor: not-allowed; }
 .mo-btn.primary {
-  background: var(--mo-accent); border-color: var(--mo-accent); color: #fff;
-  box-shadow: 0 6px 18px -10px rgba(29, 78, 216, .85);
+  background: var(--mo-accent); border-color: var(--mo-accent); color: var(--mo-accent-on);
+  box-shadow: 0 6px 18px -10px var(--mo-accent-glow);
 }
 .mo-btn.primary:hover:not(:disabled) { background: var(--mo-accent-ink);
                                        border-color: var(--mo-accent-ink); }
@@ -338,7 +366,7 @@
 .mo-metric-unit { font-size: 15px; font-weight: 550; color: var(--mo-ink-3); margin-left: 5px; }
 .mo-share { height: 5px; border-radius: 999px; background: var(--mo-bg-3); overflow: hidden; }
 .mo-share span { display: block; height: 100%; border-radius: 999px;
-                 background: linear-gradient(90deg, var(--mo-accent), #6d94fc); }
+                 background: linear-gradient(90deg, var(--mo-accent), var(--mo-accent-2)); }
 
 /* ── tables ─────────────────────────────────────────────────────────────── */
 
@@ -444,7 +472,7 @@
 .mo-bar-track { height: 9px; border-radius: 999px; background: var(--mo-bg-3); overflow: hidden; }
 .mo-bar-fill {
   height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--mo-accent), #6d94fc);
+  background: linear-gradient(90deg, var(--mo-accent), var(--mo-accent-2));
   animation: mo-grow .45s var(--mo-ease);
 }
 .mo-bar-value { font-size: 12.5px; color: var(--mo-ink); font-weight: 580;

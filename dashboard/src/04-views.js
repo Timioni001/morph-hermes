@@ -40,7 +40,7 @@
     return h("div", {
       style: {
         position: "fixed", inset: 0, zIndex: 70, display: "grid", placeItems: "center",
-        background: "rgba(11,18,32,.38)", padding: "16px"
+        background: "rgba(16,17,19,.46)", padding: "16px"
       },
       onClick: function (event) { if (event.target === event.currentTarget) { props.onClose(); } }
     }, h("div", {

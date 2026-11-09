@@ -397,8 +397,14 @@
       }, [
         h("defs", { key: "d" },
           h("linearGradient", { id: "mo-area-grad", x1: "0", y1: "0", x2: "0", y2: "1" }, [
-            h("stop", { key: "a", offset: "0%", stopColor: "#1d4ed8", stopOpacity: "0.18" }),
-            h("stop", { key: "b", offset: "100%", stopColor: "#1d4ed8", stopOpacity: "0" })
+            h("stop", {
+              key: "a", offset: "0%", stopOpacity: "0.16",
+              style: { stopColor: "var(--mo-accent)" }
+            }),
+            h("stop", {
+              key: "b", offset: "100%", stopOpacity: "0",
+              style: { stopColor: "var(--mo-accent)" }
+            })
           ])),
         h("path", { key: "a", className: "mo-line-area", d: area }),
         h("path", {
@@ -413,8 +419,9 @@
     ]);
   }
 
-  var DONUT_COLOURS = ["#1d4ed8", "#4f7dfb", "#7aa2fd", "#0e7490", "#0f766e", "#6366f1",
-                       "#9aa3b2", "#c9d6fb"];
+  // The ramp lives in CSS so it inverts with the colour scheme; see --mo-c1..8.
+  var DONUT_COLOURS = ["var(--mo-c1)", "var(--mo-c2)", "var(--mo-c3)", "var(--mo-c4)",
+                       "var(--mo-c5)", "var(--mo-c6)", "var(--mo-c7)", "var(--mo-c8)"];
 
   function DonutChart(props) {
     var points = (props.points || []).filter(function (p) { return (p.value || 0) > 0; });
@@ -427,7 +434,7 @@
       var fraction = point.value / total;
       var segment = h("circle", {
         key: point.label, className: "mo-donut-seg", cx: 50, cy: 50, r: radius,
-        stroke: DONUT_COLOURS[index % DONUT_COLOURS.length], strokeWidth: 15,
+        strokeWidth: 15, style: { stroke: DONUT_COLOURS[index % DONUT_COLOURS.length] },
         strokeDasharray: (fraction * circumference) + " " + circumference,
         strokeDashoffset: -offset, transform: "rotate(-90 50 50)"
       });

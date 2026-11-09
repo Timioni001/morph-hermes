@@ -232,7 +232,8 @@ Deadline is **5PM EST on 11 November**.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `port 8811 is already in use` | a previous run is still up | `pkill -f apps.serve` |
+| `port 8811 is already in use` | a previous run is still up | `pkill -f 'uvicorn apps\.'` |
+| `HTTP Error 401` from the demo | stale applications from an earlier run, holding the ports with the old tokens | same: `pkill -f 'uvicorn apps\.'`, then re-run |
 | Playwright cannot launch Chromium | missing Linux libraries | `npx playwright install --with-deps chromium` |
 | `hermes: command not found` after install | PATH not reloaded | `source ~/.bashrc` |
 | Connector says it needs a credential | token not in the profile environment | `python -m apps.serve --print-tokens >> ~/.hermes/.env` |
