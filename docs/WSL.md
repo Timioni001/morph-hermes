@@ -271,9 +271,11 @@ The usual consumers, largest first — check each exists before removing it:
 du -sh ~/.hermes ~/.cache/uv ~/.cache/pip ~/.cache/ms-playwright ~/.npm 2>/dev/null
 ```
 
+Each tool clears its own cache, which is safer than naming paths under your home
+directory in a recursive delete:
+
 ```bash
-rm -rf ~/.cache/uv ~/.cache/pip ~/.npm/_cacache
-sudo apt clean
+uv cache clean; pip cache purge; npm cache clean --force; sudo apt clean
 ```
 
 Hermes keeps its own store under `~/.hermes`, and manages it itself — prefer its

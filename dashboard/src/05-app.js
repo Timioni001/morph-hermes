@@ -62,7 +62,77 @@
     ]));
   }
 
+  /* Which theme the host is wearing.
+   *
+   * Hermes ships a dark shell, and the browser's own prefers-color-scheme says
+   * nothing about that — a light-preference browser showing a dark Hermes left
+   * MORPH as a white rectangle pasted into it. So read the colour the host
+   * actually paints behind us, and match it.
+   *
+   * This only reads from the host and writes to MORPH's own root element. A
+   * plugin that restyled the host's markup would be reaching into core UI.
+   */
+  function relativeLuminance(value) {
+    if (!value) { return null; }
+    try {
+      var probe = document.createElement("span");
+      probe.style.display = "none";
+      probe.style.color = "";
+      probe.style.color = value;
+      if (!probe.style.color) { return null; }      // the browser refused it
+      document.body.appendChild(probe);
+      var resolved = getComputedStyle(probe).color;
+      document.body.removeChild(probe);
+      var parts = (resolved || "").match(/[\d.]+/g);
+      if (!parts || parts.length < 3) { return null; }
+      if (parts.length >= 4 && parseFloat(parts[3]) === 0) { return null; }  // transparent
+      var channels = parts.slice(0, 3).map(function (n) {
+        var c = parseFloat(n);
+        if (c > 1) { c = c / 255; }
+        c = Math.min(1, Math.max(0, c));
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function hostIsDark() {
+    try {
+      var styles = getComputedStyle(document.documentElement);
+      var candidates = [
+        (styles.getPropertyValue("--background") || "").trim(),
+        getComputedStyle(document.body).backgroundColor,
+        styles.backgroundColor
+      ];
+      for (var i = 0; i < candidates.length; i++) {
+        var luminance = relativeLuminance(candidates[i]);
+        if (luminance !== null) { return luminance < 0.4; }
+      }
+    } catch (err) { /* fall through to the browser preference */ }
+    return !!(window.matchMedia
+      && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  }
+
+  function useHostTheme() {
+    var theme = useState(null);
+    useEffect(function () {
+      function settle() { theme[1](hostIsDark() ? "dark" : "light"); }
+      settle();
+      var timer = setTimeout(settle, 400);      // the host may still be painting
+      var media = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+      if (media && media.addEventListener) { media.addEventListener("change", settle); }
+      return function () {
+        clearTimeout(timer);
+        if (media && media.removeEventListener) { media.removeEventListener("change", settle); }
+      };
+    }, []);
+    return theme[0];
+  }
+
   function MorphPage() {
+    var hostTheme = useHostTheme();
     var stateBox = useState(null);
     var loading = useState(true);
     var morphing = useState(false);
@@ -329,7 +399,7 @@
       }));
     }
 
-    return h("div", { className: "morph" }, [
+    return h("div", { className: "morph", "data-mo-theme": hostTheme || null }, [
       h("div", { className: "mo-shell", key: "shell" }, [
         h("nav", { className: "mo-rail", key: "rail", "aria-label": "MORPH sections" }, [
           h("div", { className: "mo-mark", key: "mark" },

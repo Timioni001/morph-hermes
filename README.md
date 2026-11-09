@@ -362,21 +362,28 @@ things for a suite that executes and a contract that was read.
 - The OpenAPI adapter against the public Swagger Petstore: the document read, one entity
   derived, its listing endpoint found by schema, 44 live records listed and one read back
   — reproducible with `python scripts/check_openapi_connector.py`.
-- `hermes plugins doctor . --ci` and `hermes plugins validate .` against the Hermes CLI
-  built from a clone of `hermes-agent` — security scan clean, validation passed.
+- **Installed into a real Hermes Agent v0.23.0 and run there.** `hermes plugins doctor`
+  reports 7 tools and 3 hooks registered; `hermes plugins validate` passes every check
+  with `security scan — safe` and no cautions; `hermes morph up` starts the applications
+  and stores their tokens through Hermes's own `save_env_values`; `hermes morph doctor`
+  reports all three reachable, the plugin data directory writable at
+  `~/.hermes/plugin-data/morph/`, and the audit chain intact.
+- **The MORPH tab renders in the real Hermes web dashboard.** It appears in the
+  navigation under Plugins, mounts through the host's own
+  `window.__HERMES_PLUGIN_SDK__`, serves its API from the plugin router at
+  `/api/plugins/morph/`, resolves live values from all three applications, and logs no
+  console errors. It reads the host's background and matches its theme.
+
+![MORPH inside the Hermes dashboard](docs/assets/morph-in-hermes.png)
 
 **Implemented against the published contract, not observed in a live install**
 
-- *The dashboard tab.* The browser suite drives the real bundle through a harness that
-  implements the documented Hermes dashboard SDK — `window.__HERMES_PLUGIN_SDK__`,
-  `window.__HERMES_PLUGINS__.register()`, and the plugin router mounted at
-  `/api/plugins/morph/`. The plugin has not been rendered inside the Hermes web app
-  itself. Every machine available for this build was short of the disk and memory a
-  full Hermes install needs.
 - *Model-backed planning.* `plan()` calls `ctx.llm.complete_structured`, validates the
   result against `morph.ui.v1`, repairs once on failure, and falls back to the
-  deterministic composer. Every run recorded here reports `deterministic`, because no
-  host model was configured. Five tests exercise the model path with a stub LLM —
+  deterministic composer. Inside the real Hermes, `hermes morph doctor` reports
+  `planner: host model available` and composition still reports `deterministic`, because
+  that install has no model credential — which is the documented fallback behaving
+  correctly, not a failure. Five tests exercise the model path with a stub LLM —
   schema-only prompting, one repair attempt, and three distinct failure modes falling
   back rather than erroring — but it has not been watched against a live model.
 

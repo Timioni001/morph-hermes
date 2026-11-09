@@ -108,6 +108,52 @@
   }
 }
 
+/* The same palette, chosen explicitly. The dashboard runs inside a host whose
+   own theme is not the operating system's: Hermes ships a dark shell while the
+   browser may report a light preference. The app reads the host's background
+   at mount and sets data-mo-theme on its own root — never on the host's markup.
+   tests/unit/test_dashboard_bundle.py keeps the two blocks in step. */
+.morph[data-mo-theme="dark"] {
+    --mo-ink: #f3f3f5;
+    --mo-ink-2: #c5c7cc;
+    --mo-ink-3: #93969d;
+    --mo-ink-4: #6f7279;
+    --mo-line: #272930;
+    --mo-line-2: #1d1f25;
+    --mo-bg: #0e0f12;
+    --mo-bg-2: #141519;
+    --mo-bg-3: #1a1b20;
+    /* The accent inverts to near-white so a filled control stays the brightest
+       thing on the surface; --mo-accent-on inverts with it. */
+    --mo-accent: #ededf0;
+    --mo-accent-2: #b7bac1;
+    --mo-accent-ink: #ffffff;
+    --mo-accent-on: #0e0f12;
+    --mo-accent-soft: #1e2026;
+    --mo-accent-line: #343741;
+    --mo-accent-glow: rgba(0, 0, 0, .66);
+    --mo-c1: #f0f1f3;
+    --mo-c2: #d2d4d9;
+    --mo-c3: #b4b7be;
+    --mo-c4: #9699a1;
+    --mo-c5: #797d85;
+    --mo-c6: #5e626a;
+    --mo-c7: #474a52;
+    --mo-c8: #33363d;
+    --mo-good: #4ade9f;
+    --mo-good-soft: #10231c;
+    --mo-good-line: #1f4336;
+    --mo-warn: #f0b457;
+    --mo-warn-soft: #241b0f;
+    --mo-warn-line: #4a3819;
+    --mo-bad: #fb8785;
+    --mo-bad-soft: #251314;
+    --mo-bad-line: #4b2626;
+    --mo-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -20px rgba(0, 0, 0, .8);
+    --mo-shadow-lift: 0 1px 2px rgba(0, 0, 0, .6), 0 22px 48px -26px rgba(0, 0, 0, .9);
+  }
+
+
 .morph *,
 .morph *::before,
 .morph *::after { box-sizing: border-box; }
