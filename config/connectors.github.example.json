@@ -1,0 +1,43 @@
+{
+  "$comment": "MORPH wired to a real third-party API. Copy to <plugin data dir>/config.json, set options.repo, and put a GitHub token with 'repo' scope in the Hermes profile environment as MORPH_GITHUB_TOKEN. See docs/CONNECTORS.md.",
+  "allow_loopback": true,
+  "allowed_hosts": ["127.0.0.1", "localhost", "api.github.com"],
+  "default_role": "operator",
+  "agent_role": "agent",
+  "connectors": [
+    {
+      "id": "github",
+      "kind": "github",
+      "label": "GitHub",
+      "token_env": "MORPH_GITHUB_TOKEN",
+      "timeout": 12.0,
+      "max_retries": 2,
+      "options": { "repo": "owner/name" }
+    },
+    {
+      "id": "helpdesk",
+      "kind": "http-rest",
+      "label": "Helpdesk",
+      "base_url": "http://127.0.0.1:8812",
+      "token_env": "MORPH_HELPDESK_TOKEN"
+    }
+  ],
+  "links": [
+    {
+      "$comment": "Cross-application joins are declared by the operator, because no application can know about another. This one needs a convention: put the issue number in the case's order_ref field.",
+      "name": "github_issue",
+      "source": "helpdesk.cases.order_ref",
+      "target": "github.issues.number",
+      "cardinality": "one"
+    }
+  ],
+  "roles": {
+    "operator": {
+      "label": "Operations lead",
+      "allow": ["*"],
+      "deny": ["github.issues.close_issue"],
+      "max_risk": "medium",
+      "can_approve": true
+    }
+  }
+}

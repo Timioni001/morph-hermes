@@ -40,6 +40,14 @@ cannot reach.
 > actually flagged in the Storefront, with the Storefront's own changelog showing who
 > approved it.
 
+Three demo applications ship with MORPH so the whole thing is reproducible with no
+account and no key. A **GitHub connector** ships alongside them to show the adapter
+contract is not shaped around them: GitHub publishes no MORPH schema, no version field,
+no idempotency header and no change feed in the shape MORPH asks for, and it still slots
+in as one more application in the graph — with optimistic concurrency derived from
+`updated_at`, idempotency enforced on MORPH's side, and incremental reads as its change
+feed. See `docs/CONNECTORS.md`.
+
 ![MORPH workspace](docs/assets/catalog-card.png)
 
 <p align="center">
@@ -210,7 +218,7 @@ docs/             architecture, connectors, security, demo
 ## Tests
 
 ```bash
-pytest                      # 161 tests: unit, integration against the real services, security
+pytest                      # 176 tests: unit, integration against the real services, security
 scripts/e2e.sh              # 39 browser checks, Chromium, the real bundle and the real API
 node scripts/build_dashboard.mjs --check   # the committed bundle matches its sources
 hermes plugins validate .   # the catalog admission checks
@@ -250,6 +258,11 @@ The long version is `docs/SECURITY.md`. The short version:
 - **Nothing is atomic across applications**, and MORPH never claims otherwise: a batch
   reports each item separately.
 
+## Running it on WSL
+
+`docs/WSL.md` is the exact command list, including the one check the cloud build could
+not run: `hermes dashboard` with the MORPH tab inside the real Hermes web app.
+
 ## Limitations
 
 - Per-user roles come from the dashboard session identity Hermes provides; with the
@@ -259,7 +272,12 @@ The long version is `docs/SECURITY.md`. The short version:
   implements the documented Hermes dashboard SDK. It is not the Hermes dashboard itself.
 - The bundled applications are demonstration systems. They are real services with real
   databases and real HTTP APIs, which is what makes the integration demonstrable — they
-  are not a storefront.
+  are not a storefront. The GitHub connector talks to the real GitHub API; it is driven
+  by a fake transport in CI and by `scripts/check_github_connector.py` against a real
+  repository.
+- The GitHub connector offers only operations whose effect can be verified by re-reading
+  the issue. Posting a comment is deliberately absent: its effect is an increment, so
+  MORPH could not prove the change it promised.
 - MORPH plans with whatever model Hermes is configured to use. Quality varies with it; the
   deterministic composer is the floor, not the ceiling.
 

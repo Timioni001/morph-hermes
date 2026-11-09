@@ -32,8 +32,11 @@ description: >-
   it calls the host model through ctx.llm for interface planning with a
   deterministic offline fallback, and sends the model schema only, never a record
   value. No telemetry, no background processes, no shell commands, no self-updating
-  code. Ships three read-only workflow skills and three demo applications so the
-  whole thing is reproducible locally with no account and no key.
+  code. Ships three read-only workflow skills, three demo applications so the whole
+  thing is reproducible locally with no account and no key, and a GitHub connector
+  (issues: close, reopen, assign — only operations whose effect can be verified by
+  re-reading the issue) that talks to api.github.com with a token the operator
+  supplies, to show the adapter contract works against an API nobody controls.
 maintainer: timioni001
 tier: community
 category: tools

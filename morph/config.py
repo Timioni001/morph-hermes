@@ -282,7 +282,7 @@ def _connectors(raw: Any, allow_loopback: bool, allowed_hosts: tuple[str, ...]) 
             raise ConfigError(f"duplicate connector id {cid!r}")
         seen.add(cid)
         kind = str(item.get("kind") or "http-rest")
-        if kind not in ("http-rest", "memory"):
+        if kind not in ("http-rest", "memory", "github"):
             raise ConfigError(f"connector {cid!r}: unsupported kind {kind!r}")
         token_env = str(item.get("token_env") or "")
         if token_env and not ENV_NAME.match(token_env):

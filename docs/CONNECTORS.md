@@ -128,6 +128,30 @@ it.
 
 ---
 
+## Worked example: the GitHub connector
+
+`morph/connectors/github.py` is the adapter route done against an API nobody controls,
+and it is the honest version of what that costs:
+
+| What MORPH wants | What GitHub has | What the adapter does |
+|---|---|---|
+| An integer `_version` | `updated_at` | Derives the version from the timestamp. Optimistic concurrency then means "untouched since the proposal was built" — the guarantee that matters, reached another way. |
+| An `Idempotency-Key` header | nothing | Enforces the key on MORPH's side, and offers only set-to-value operations, so a repeat is harmless even if the cache is lost. |
+| `GET /v1/_changes?since=` | `GET /issues?since=` | Uses GitHub's own incremental read, which catches an issue closed in the GitHub UI. |
+| Declared operations | a REST API | Publishes three: `close_issue`, `reopen_issue`, `assign_to_me`. |
+
+The missing fourth operation is the interesting one. Posting a comment would be useful,
+and it is deliberately absent: its effect is an increment, so MORPH could not re-read the
+issue and prove the change it promised. **An action MORPH cannot verify is an action
+MORPH should not offer** — and that rule is worth more than the feature.
+
+Try it against your own repository, read-only:
+
+```bash
+export MORPH_GITHUB_TOKEN="$(gh auth token)"
+python scripts/check_github_connector.py --repo owner/name --propose
+```
+
 ## Option 2 — write an adapter
 
 For an application that will not publish the above (a vendor API you do not control, a
