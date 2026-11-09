@@ -1,4 +1,7 @@
-# Running the demonstration
+# Running the offline sandbox
+
+This exercises MORPH against the three bundled practice services. For the real thing,
+`hermes morph connect github owner/name` — see the README.
 
 ```bash
 python -m demo.run_demo            # ~15 seconds, prints every check

@@ -3,8 +3,8 @@
  * Everything on screen is a real interaction with the real plugin bundle, the real
  * dashboard API and the three real applications. Nothing is staged: the approval
  * really applies, and the source application's own page is reloaded afterwards to
- * show the change. The only thing added in post is the caption text, whose timings
- * this script records as it goes.
+ * show the change. The only things added in post are the caption text and its
+ * narration, at timings this script records as it goes.
  *
  *   node scripts/record_demo.cjs [--base http://127.0.0.1:8820] [--out .media]
  */
@@ -32,16 +32,28 @@ let current = null;
 
 function now() { return (Date.now() - started) / 1000; }
 
-function say(text) {
-  if (current) { current.end = now(); captions.push(current); }
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// With a narration track (scripts/voice.py), a line stays up at least as long as it
+// takes to say, so the voice never runs into the next one.
+const VOICE = path.join(OUT, "voice", "durations.json");
+const spoken = fs.existsSync(VOICE) ? JSON.parse(fs.readFileSync(VOICE, "utf8")) : {};
+
+async function finish() {
+  if (!current) { return; }
+  const needed = current.start + (spoken[current.text] || 0) + 0.45;
+  if (now() < needed) { await wait((needed - now()) * 1000); }
+  current.end = now();
+  captions.push(current);
+  current = null;
+}
+
+async function say(text) {
+  await finish();
   current = { start: now(), end: null, text };
 }
 
-function closeCaption() {
-  if (current) { current.end = now(); captions.push(current); current = null; }
-}
-
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function closeCaption() { await finish(); }
 
 async function main() {
   const browser = await chromium.launch();
@@ -55,7 +67,7 @@ async function main() {
   started = Date.now();
 
   // 1 ─ the source application, before anything happens
-  say("Three independent applications. This is the Storefront's own record list.");
+  await say("This is a service the agent can write to. Order 2045, on its own page: not reviewed.");
   await page.goto(STOREFRONT + "/", { waitUntil: "networkidle" });
   await wait(2200);
   await page.evaluate(() => {
@@ -66,13 +78,13 @@ async function main() {
   await wait(2600);
 
   // 2 ─ MORPH, empty-handed
-  say("MORPH is connected to all three. It has no layouts of its own.");
+  await say("MORPH connects from the schema alone, and learns which changes can be checked afterwards.");
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".mo-metric-value", { timeout: 30000 });
   await wait(1800);
 
   // 3 ─ a goal, typed
-  say("A goal, in plain language.");
+  await say("Ask for what you need, in plain language.");
   const goal = "Work through delayed orders and the complaints about them";
   await page.click("#mo-goal-input");
   for (const character of goal) {
@@ -80,23 +92,23 @@ async function main() {
   }
   await wait(600);
 
-  say("MORPH reads the three schemas and composes an interface from them.");
+  await say("MORPH composes a working view from live data.");
   await page.getByRole("button", { name: /Transform workspace|Compose workspace/ }).click();
   await page.waitForFunction(() => Array.from(document.querySelectorAll(".mo-toast-title"))
     .some((n) => /Workspace transformed/.test(n.textContent)), null, { timeout: 30000 });
   await page.waitForSelector(".mo-metric-value");
   await wait(2000);
 
-  say("Live counts, a chart, the queue — all read from the applications just now.");
+  await say("Counts, a board and the queue, read from the services a moment ago.");
   await page.mouse.wheel(0, 420);
   await wait(2400);
 
-  say("And a join across two applications: orders beside their support cases.");
+  await say("Records are joined across services: orders beside their support cases.");
   await page.mouse.wheel(0, 560);
   await wait(2800);
 
   // 4 ─ select a record
-  say("Choosing a row retargets the detail pane and the action form.");
+  await say("Pick a record, and the actions that apply to it follow.");
   const table = page.locator(".mo-card", { hasText: "Orders needing attention" }).first();
   await table.scrollIntoViewIfNeeded();
   await wait(700);
@@ -107,7 +119,7 @@ async function main() {
   await wait(2200);
 
   // 5 ─ propose
-  say("The action is proposed, never applied. Nothing has changed yet.");
+  await say("The change is proposed, never applied. Nothing has changed yet.");
   await row.getByRole("button", { name: "Flag for review" }).click();
   await page.waitForSelector("[role=dialog]");
   await wait(900);
@@ -115,22 +127,25 @@ async function main() {
     .type("75 hours late and the customer is chasing", { delay: 16 });
   await wait(700);
   await page.getByRole("button", { name: "Propose for approval" }).click();
+  await page.waitForSelector(".mo-rail-badge");
+  await wait(1600);
+  await page.locator(".morph").getByRole("button", { name: "Approvals" }).first().click();
   await page.waitForSelector(".mo-approval");
-  await wait(1200);
+  await wait(600);
 
   // 6 ─ approve
-  say("A human approves. The agent cannot: it is never given the token.");
+  await say("The exact before and after. Only a person can approve; the agent has no tool for it.");
   const card = page.locator(".mo-approval", { hasText: "flag for review" }).first();
   await card.scrollIntoViewIfNeeded();
-  await wait(1400);
+  await wait(4600);                 // the before/after stays up while it is described
   await card.getByRole("button", { name: "Approve & apply" }).click();
   await page.waitForFunction(() => Array.from(document.querySelectorAll(".mo-toast-title"))
     .some((n) => /Applied and verified/.test(n.textContent)), null, { timeout: 30000 });
-  say("Applied, then verified by re-reading the record from the Storefront.");
+  await say("Applied, then verified by reading the record back from the service.");
   await wait(2800);
 
   // 7 ─ the proof, in the source application
-  say("The proof: the Storefront's own page, reloaded.");
+  await say("The proof: the service's own page, reloaded. Flagged for review.");
   await page.goto(STOREFRONT + "/", { waitUntil: "networkidle" });
   await page.evaluate(() => {
     const target = Array.from(document.querySelectorAll("tr"))
@@ -144,7 +159,7 @@ async function main() {
   await wait(3600);
 
   // 8 ─ the goal changes
-  say("Change the goal and the workspace changes with it.");
+  await say("Change the goal, and the view changes with it.");
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".mo-metric-value", { timeout: 30000 });
   await wait(1200);
@@ -156,15 +171,15 @@ async function main() {
   await page.waitForFunction(() => Array.from(document.querySelectorAll(".mo-toast-title"))
     .some((n) => /Workspace transformed/.test(n.textContent)), null, { timeout: 30000 });
   await page.waitForSelector(".mo-metric-value");
-  say("Same applications, a different interface — and your selection carried over.");
+  await say("Same services, a different view, and your selection carried over.");
   await wait(2600);
   await page.mouse.wheel(0, 500);
   await wait(2400);
 
-  say("MORPH. Software that adapts to you.");
+  await say("MORPH, for Hermes. The agent proposes, you approve, the change is verified.");
   await wait(2400);
 
-  closeCaption();
+  await closeCaption();
   const video = page.video();
   await context.close();
   await browser.close();

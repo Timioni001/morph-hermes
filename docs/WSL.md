@@ -147,11 +147,18 @@ hermes plugins enable morph
 MORPH declares `dependencies = []`, so `--install-deps` has nothing to install
 for it. `make validate-ci` adds the flag if you want exactly what catalog CI runs.
 
-Then bring the applications up. One command starts the ones MORPH ships with and
-writes their bearer tokens into the Hermes profile environment, so the connectors
-authenticate the way they would against any real service:
+Then connect something. A repository:
 
 ```bash
+hermes morph connect github owner/name
+```
+
+or the offline practice services, which one more command starts, writing their
+bearer tokens into the Hermes profile environment so the connectors authenticate
+the way they would against any real service:
+
+```bash
+hermes morph connect sandbox
 hermes morph up
 ```
 

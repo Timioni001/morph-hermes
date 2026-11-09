@@ -1,5 +1,5 @@
 {
-  "$comment": "Default MORPH wiring: the three bundled demo applications on loopback. Copy to <plugin data dir>/config.json and edit, or point MORPH_CONFIG_FILE at your own file. See docs/CONNECTORS.md.",
+  "$comment": "The offline sandbox: three bundled practice applications on loopback. `hermes morph connect sandbox` installs this wiring; nothing uses it otherwise. See docs/CONNECTORS.md.",
   "allow_loopback": true,
   "allowed_hosts": ["127.0.0.1", "localhost"],
   "planner_enabled": true,

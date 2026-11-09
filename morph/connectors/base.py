@@ -394,6 +394,18 @@ class Connector(abc.ABC):
         """Run one named operation. Must enforce optimistic concurrency when
         ``expected_version`` is given and must be idempotent for a repeated key."""
 
+    def normalise_params(self, entity: str, operation: str,
+                         params: dict[str, Any]) -> dict[str, Any]:
+        """Rewrite *params* into the form the source will report them back in.
+
+        The promise shown to the approver and the read-back check are both built
+        from the parameters, so a connector whose source canonicalises a value
+        (sorts a list, trims a title) says so here — otherwise a correct write
+        would fail verification on formatting alone.
+        """
+        del entity, operation
+        return params
+
     # — shared helpers —
     def entity_or_raise(self, entity: str) -> EntityDescriptor:
         described = self.describe().entity(entity)

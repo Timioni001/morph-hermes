@@ -287,7 +287,7 @@ def test_the_plugin_registers_against_the_real_hermes_contract(live_config):
     assert sorted(registered["hooks"]) == sorted(manifest["provides_hooks"])
     assert "morph" in registered["commands"] and "morph" in registered["cli"]
     assert "morph" in registered["prompt"]
-    assert sorted(registered["skills"]) == ["connect-an-application", "operations-triage",
+    assert sorted(registered["skills"]) == ["connect-an-application", "triage",
                                             "verified-change"]
     for path, description in registered["skills"].values():
         assert Path(path).is_file() and description

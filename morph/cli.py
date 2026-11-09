@@ -11,7 +11,7 @@ import json
 import sys
 from typing import Any, Optional
 
-from morph import actions, engine, launch, registry, store, workspace
+from morph import actions, connect, engine, launch, registry, store, workspace
 from morph.actions import Principal
 from morph.config import settings
 from morph.errors import MorphError, PermissionDenied
@@ -33,6 +33,8 @@ def _out(payload: Any, as_json: bool) -> int:
 
 def status_text() -> str:
     current = settings()
+    if not current.connectors:
+        return "MORPH · " + NOTHING_CONNECTED
     lines = [f"MORPH · configuration from {current.source}"]
     for probe in registry.health():
         mark = "ok" if probe.get("ok") else "unreachable"
@@ -93,6 +95,37 @@ def setup_parser(parser: Any) -> None:
     subparsers.add_parser("audit", help="recent audit entries and chain verification")
     subparsers.add_parser("doctor", help="check configuration, reachability and storage")
     subparsers.add_parser("reload", help="re-read configuration and rebuild connectors")
+
+    connect = subparsers.add_parser(
+        "connect", help="connect an API: a GitHub repository, any OpenAPI service, or the sandbox")
+    kinds = connect.add_subparsers(dest="connect_kind")
+    gh = kinds.add_parser("github", help="one repository's issues and pull requests")
+    gh.add_argument("repo", help="owner/name")
+    gh.add_argument("--token-env", default="GITHUB_TOKEN",
+                    help="environment variable holding a GitHub token (default GITHUB_TOKEN); "
+                         "without one the repository is read anonymously")
+    oa = kinds.add_parser("openapi", help="any service that publishes an OpenAPI 3 document")
+    oa.add_argument("base_url", help="the service's base URL")
+    oa.add_argument("--spec-path", default="/openapi.json",
+                    help="where the document lives, relative to the base URL")
+    oa.add_argument("--token-env", default="",
+                    help="environment variable holding a bearer token, if the API needs one")
+    oa.add_argument("--label", default="", help="display name")
+    for sub in (gh, oa):
+        sub.add_argument("--id", default="", help="name for this connection (derived if omitted)")
+        sub.add_argument("--read-only", action="store_true",
+                         help="never let anything be written through this connection")
+        sub.add_argument("--keep", action="store_true",
+                         help="save the connection even if the service does not answer now")
+    sandbox = kinds.add_parser("sandbox", help="three bundled practice applications, offline")
+    for sub in (gh, oa, sandbox):
+        sub.add_argument("--replace", action="store_true",
+                         help="overwrite a connection with the same name")
+
+    disconnect = subparsers.add_parser("disconnect", help="remove a connection")
+    disconnect.add_argument("connector_id")
+
+    subparsers.add_parser("connections", help="what is connected and what each one offers")
 
     up = subparsers.add_parser(
         "up", help="start the applications MORPH ships with and report what is live")
@@ -306,13 +339,94 @@ def _dispatch(command: str, args: Any, as_json: bool) -> int:  # noqa: C901 - a 
     if command == "up":
         return _up(args, as_json)
 
+    if command == "connect":
+        return _connect(args, as_json)
+
+    if command == "disconnect":
+        result = connect.remove(str(args.connector_id))
+        if as_json:
+            return _out(result, True)
+        print(f"Disconnected {result['disconnected']}."
+              + (f" Removed joins: {', '.join(result['links_removed'])}."
+                 if result["links_removed"] else ""))
+        return 0
+
+    if command == "connections":
+        entries = connect.summary()
+        if as_json:
+            return _out(entries, True)
+        for line in _connections_text(entries):
+            print(line)
+        return 0
+
     raise MorphError(f"unknown subcommand {command!r}")
+
+
+NOTHING_CONNECTED = (
+    "Nothing is connected yet. Connect something:\n"
+    "  hermes morph connect github owner/name        a repository's issues\n"
+    "  hermes morph connect openapi https://api...   any API with an OpenAPI document\n"
+    "  hermes morph connect sandbox                  three practice applications, offline")
+
+
+def _connect(args: Any, as_json: bool) -> int:
+    kind = getattr(args, "connect_kind", None)
+    if kind == "github":
+        result = connect.add_github(
+            args.repo, connector_id=args.id, token_env=args.token_env,
+            read_only=args.read_only, replace=args.replace, keep_unreachable=args.keep)
+    elif kind == "openapi":
+        result = connect.add_openapi(
+            args.base_url, connector_id=args.id, spec_path=args.spec_path,
+            token_env=args.token_env, label=args.label, read_only=args.read_only,
+            replace=args.replace, keep_unreachable=args.keep)
+    elif kind == "sandbox":
+        result = connect.add_sandbox(replace=args.replace)
+    else:
+        print(NOTHING_CONNECTED.split("\n", 1)[1])
+        return 2
+    if as_json:
+        return _out(result, True)
+    if kind == "sandbox":
+        print("Sandbox installed: " + ", ".join(result["connected"]) + ".")
+        print("Start it with: hermes morph up")
+        return 0
+    for line in _connections_text(
+            [e for e in connect.summary() if e["id"] in result["connected"]]):
+        print(line)
+    print("Next: hermes morph goal \"what you want to get done\"")
+    return 0
+
+
+def _connections_text(entries: list[dict[str, Any]]) -> list[str]:
+    if not entries:
+        return NOTHING_CONNECTED.split("\n")
+    lines: list[str] = []
+    for entry in entries:
+        if not entry["ok"]:
+            lines.append(f"  [unreachable] {entry['label']} ({entry['id']}) — {entry['error']}")
+            continue
+        who = f" as {entry['acting_as']}" if entry["acting_as"] else ""
+        lines.append(f"  [connected] {entry['label']} ({entry['id']}){who}")
+        for entity in entry["entities"]:
+            ops = entity["operations"]
+            offered = (", ".join(ops) if ops
+                       else "read-only — nothing here can be changed through MORPH")
+            lines.append(f"      {entity['name']}: {offered}")
+    return lines
 
 
 def _up(args: Any, as_json: bool) -> int:  # noqa: C901 - one linear procedure
     """``hermes morph up`` — start what is ours, report what is not."""
     # Before the survey: an unauthenticated probe cannot tell a running
     # application from a stopped one, and the survey decides what to start.
+    if not settings().connectors:
+        if as_json:
+            return _out({"started": [], "running": [], "hint": "hermes morph connect sandbox"},
+                        True)
+        print("Nothing is connected, so there is nothing to start. `up` runs the bundled\n"
+              "sandbox applications; install them first:\n  hermes morph connect sandbox")
+        return 0
     exports = launch.prime_environment()
     plans = launch.survey()
     startable = [plan for plan in plans if plan.actionable]

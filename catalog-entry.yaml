@@ -9,34 +9,32 @@ repo: https://github.com/timioni001/morph-hermes
 sha: "0000000000000000000000000000000000000000"  # set to the submitted commit
 title: "MORPH"
 description: >-
-  One adaptive workspace over several independent applications, with human-approved
-  cross-application actions. MORPH introspects each connected application's schema
-  over HTTP, builds a capability graph, interprets a goal stated in plain language
-  (and says what it could not cover — including an operation that exists but your
-  role may not run), plans a validated declarative interface, resolves it against
-  live data and joins records across application boundaries. It renders metrics,
-  sortable tables, charts, a kanban board grouped by a dimension the application
-  actually lets you change, timelines, forms and contextual actions across five
-  views: Workspace, Connections, Approvals, Activity and Context. Writes are
-  two-step — the agent may only propose, a human approves in the dashboard, and
-  every applied action is verified by re-reading the record from the source
-  application before it is called done. Each application publishes a change feed, so
-  MORPH also sees edits made directly in the source system and attributes them.
-  Disclosure — MORPH makes outbound HTTPS calls to the applications the operator
-  configures (loopback only with an explicit opt-in; private, link-local, reserved
-  and cloud-metadata targets are refused, redirects are never followed, and the
-  address actually dialled is validated at connect time); it stores workspaces,
-  pending proposals, read cursors and a hash-chained audit log in its own
-  plugin-data SQLite database; it reads connector bearer tokens through
-  agent.secret_scope by environment-variable name and never logs or returns them;
-  it calls the host model through ctx.llm for interface planning with a
-  deterministic offline fallback, and sends the model schema only, never a record
-  value. No telemetry, no background processes, no shell commands, no self-updating
-  code. Ships three read-only workflow skills, three demo applications so the whole
-  thing is reproducible locally with no account and no key, and a GitHub connector
-  (issues: close, reopen, assign — only operations whose effect can be verified by
-  re-reading the issue) that talks to api.github.com with a token the operator
-  supplies, to show the adapter contract works against an API nobody controls.
+  An approval gate between the agent and the APIs it can write to. Connect a GitHub
+  repository (`hermes morph connect github owner/name`) or any service that publishes
+  an OpenAPI document, and MORPH learns from the schema what can be read and what can
+  be safely changed. The agent gets tools to read and to propose; it has no tool that
+  approves and is never given the token an approval needs. A human approves each
+  change in the dashboard, seeing the exact before and after; MORPH writes it, then
+  re-reads the record from the API and reports it verified only if it matches what
+  was promised. Only operations with a checkable effect are offered — for GitHub
+  issues: close, close as not planned, reopen, set labels, set title, assign,
+  unassign. The dashboard has five views (Workspace, Connections, Approvals, Activity,
+  Context) and composes tables, boards and charts over the connected data from a goal
+  stated in plain language. Every proposal, approval and result is kept in a
+  hash-chained audit log.
+  Disclosure — MORPH makes outbound HTTPS calls to the services the operator
+  connects, including api.github.com when a repository is connected (loopback only
+  with an explicit opt-in; private, link-local, reserved and cloud-metadata targets
+  are refused, redirects are never followed, and the address actually dialled is
+  validated at connect time); it stores its connection list, workspaces, pending
+  proposals, read cursors and the audit log in its own plugin-data directory; it
+  reads bearer tokens through agent.secret_scope by environment-variable name and
+  never logs, stores or returns them; it calls the host model through ctx.llm for
+  interface planning with a deterministic offline fallback, and sends the model
+  schema only, never a record value. No telemetry, no shell commands, no
+  self-updating code. Ships three workflow skills and an optional offline sandbox of
+  three loopback services (`hermes morph connect sandbox`, started only by
+  `hermes morph up`) so the whole loop can be tried with no account and no key.
 maintainer: timioni001
 tier: community
 category: tools

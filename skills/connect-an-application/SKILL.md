@@ -5,8 +5,20 @@ description: Connect a new application to MORPH — the three endpoints a servic
 
 # Connecting an application to MORPH
 
-MORPH reaches an application over HTTP, the same way it would reach a third-party
-SaaS product. There are two routes in.
+Most connections need no code and no hand-written configuration. The operator runs
+one of these — you cannot run them for them, and you never handle the token:
+
+```
+hermes morph connect github owner/name
+hermes morph connect openapi https://api.example.com --token-env EXAMPLE_TOKEN
+```
+
+`connect` checks the service answers before saving, and saves the *name* of the
+variable holding the token, never the token. `hermes morph connections` shows what
+is connected and which operations may be proposed there.
+
+The rest of this guide is for a service that has no OpenAPI document, or that you
+control and want described exactly. There are two routes in.
 
 ## Route 1: publish `morph.source.v1`
 

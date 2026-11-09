@@ -1,37 +1,30 @@
 # Demo video brief — under 90 seconds
 
-The rubric is **usefulness, reliability, polish and creativity**, and judges favour a
-plugin that does more than a prompt or a skill could. So the video has one job:
+One sentence to land:
 
-> prove that a goal became a working interface over several real applications, and
-> that an approved action actually changed one of them.
+> My agent can act on my real GitHub repository, but it cannot act alone: it proposes,
+> I approve, and MORPH proves the change by reading it back.
 
-Everything else is decoration. The single most persuasive frame in the whole video is
-the **Storefront's own page showing the record changed** — not MORPH's own UI
-claiming it did.
+The most persuasive frame is **github.com itself showing the issue changed**, not
+MORPH's own UI claiming it did.
 
 ---
 
 ## Setup before you hit record
 
+A scratch repository with four or five open issues — two obvious duplicates, one bug
+with no assignee. A `GITHUB_TOKEN` for it in your Hermes environment.
+
 ```bash
-cd ~/morph-hermes
-pkill -f apps.serve; pkill -f harness.serve
-# A clean slate without deleting anything: point both data directories at fresh
-# temporary ones for this run only.
-MORPH_DEMO_DATA_DIR="$(mktemp -d)" MORPH_DATA_DIR="$(mktemp -d)" \
-  python -m demo.run_demo --serve
+hermes morph connect github your-name/scratch-repo
 ```
 
-Two browser windows, side by side or tabbed:
+```bash
+hermes dashboard
+```
 
-1. **http://localhost:8820** — MORPH
-2. **http://localhost:8811** — the Storefront's own page, scrolled to `ORD-2045`
-
-Set the browser to 1440×900 or larger. Hide bookmarks. Light mode.
-
-Or just run `scripts/make_video.sh`, which drives all of this with Playwright and
-burns in captions — then re-record by hand only if you want your own voice on it.
+Two browser tabs: the Hermes dashboard on **MORPH**, and the repository's Issues page
+on github.com. A terminal with `hermes` chat open. 1440×900 or larger, bookmarks hidden.
 
 ---
 
@@ -39,46 +32,59 @@ burns in captions — then re-record by hand only if you want your own voice on 
 
 | # | Time | On screen | Say |
 |---|---|---|---|
-| 1 | 0:00–0:08 | Storefront page, `ORD-2045`, `review_status = none`, `v1` | "Three separate applications. This is the Storefront's own record list — order 2045, no review, version 1." |
-| 2 | 0:08–0:14 | MORPH, Connections view | "MORPH is connected to all three. It has no layouts of its own — it reads their schemas." |
-| 3 | 0:14–0:26 | Workspace view; type the goal; hit Transform | "I give it a goal in plain language: work through delayed orders and the complaints about them." |
-| 4 | 0:26–0:38 | Scroll: metrics → board → queue → the joined table | "It composed this. Live counts, a triage board, and orders joined to their support cases — across two different applications." |
-| 5 | 0:38–0:46 | Click row `ORD-2045`; detail and form retarget | "Picking a record drives the detail pane and targets the action." |
-| 6 | 0:46–0:56 | Click **Flag for review**, type a reason, **Propose for approval** | "The agent can propose. It cannot approve, and it is never given the token an approval needs." |
-| 7 | 0:56–1:06 | Approvals view; the before/after card; **Approve & apply** | "A person approves — and sees exactly what the source application promised to change." |
-| 8 | 1:06–1:14 | Toast: *Applied and verified* | "MORPH writes it, then re-reads the record and checks it against what was promised." |
-| 9 | 1:14–1:24 | **Switch to the Storefront page and reload** | "And there it is, in the Storefront's own system. Flagged, with the reason, version 2." |
-| 10 | 1:24–1:30 | Back to MORPH; type the second goal; the workspace transforms | "Change the goal and the workspace changes with it — and your selection carries over." |
+| 1 | 0:00–0:08 | github.com, the open issues | "This is a real repository. I want my agent to triage it — but I don't want to hand it the keys." |
+| 2 | 0:08–0:16 | Terminal: `hermes morph connect github …` → `[connected]` and the operation list | "One command connects it. These are the only changes that exist, and each one states exactly what it will set." |
+| 3 | 0:16–0:30 | Hermes chat: *"close the duplicates of #1 as not planned and assign the open bug to me"* → the agent's reply | "The agent reads the issues and proposes. It says so: nothing is applied yet." |
+| 4 | 0:30–0:36 | github.com, reload — nothing changed | "And nothing has changed." |
+| 5 | 0:36–0:52 | MORPH → **Approvals**: the cards with before/after | "Here is each change, before and after. There is no tool the agent could call to approve these." |
+| 6 | 0:52–1:02 | **Approve & apply** on each; toast *Applied and verified* | "I approve. MORPH writes it, then reads the issue back from GitHub and compares." |
+| 7 | 1:02–1:12 | **github.com, reload** — issues closed as not planned, bug assigned | "There it is, on GitHub." |
+| 8 | 1:12–1:22 | MORPH → **Activity**: the chain, *intact* | "And a tamper-evident record of who approved what." |
+| 9 | 1:22–1:30 | Terminal: `hermes morph connect openapi https://…` | "It is not GitHub-specific — anything with an OpenAPI document connects the same way." |
 
-If you are tight on time, cut shot 2 and shorten shot 4. **Never cut 1, 7, 8 or 9** —
-they are the proof.
+If you are tight on time, cut 8 or 9. **Never cut 4, 5, 6 or 7** — they are the proof.
+
+Shot 3 needs a model configured in Hermes (`hermes setup --portal`). Without one,
+propose from the dashboard instead: select an issue in the Workspace view and use its
+action — the approval and verification shots are identical.
+
+No GitHub token to hand? `hermes morph connect sandbox && hermes morph up` gives the
+same loop against three offline practice services, with the service's own page at
+<http://localhost:8811> standing in for github.com.
+
+---
+
+## A ready-made cut
+
+`scripts/make_video.sh` records a real browser session against the offline sandbox
+and writes `.media/morph-demo.mp4`: about a minute, captioned, and narrated if a Piper
+voice model is present (free, runs locally). It shows the sandbox, not GitHub — use it
+as is, or as the fallback if you cannot record the GitHub cut above.
 
 ---
 
 ## Lines worth saying out loud
 
 - *"The agent cannot approve. There is no tool that approves."*
-- *"Verified means MORPH re-read the record from the application that owns it."*
-- *"That is the Storefront's own page, not MORPH's."*
+- *"Verified means MORPH re-read the issue from GitHub."*
+- *"That is github.com, not MORPH."*
 
 ## Things to avoid
 
 - Don't narrate the architecture. Show the change landing.
-- Don't say "AI-powered". Everyone says it; the differentiator is the approval and
-  the verification.
-- Don't show the terminal for more than a second or two.
+- Don't say "AI-powered". The differentiator is the approval and the verification.
 - Don't speed up the approval step. It is the point.
 
 ---
 
 ## Caption for the X post
 
-> MORPH — software that adapts to you.
+> MORPH — let your Hermes agent act on your APIs without letting it act alone.
 >
-> A Hermes plugin that turns several independent applications into one workspace
-> shaped around your goal, then lets you act on them: the agent proposes, a human
-> approves, and MORPH verifies the change by reading it back from the source system.
+> Connect a GitHub repo (or anything with an OpenAPI doc). The agent can only propose
+> changes. You approve each one, seeing the before and after. MORPH then reads the
+> record back to prove it landed.
 >
-> Three real services, real HTTP APIs, real writes. 161 tests + 39 browser checks.
+> hermes morph connect github owner/name
 >
 > @NousResearch

@@ -22,3 +22,4 @@ tests/e2e/harness/static/
 node_modules/
 .media/
 plugin-catalog-morph.yaml
+plugin-catalog-pr-body.md

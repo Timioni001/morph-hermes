@@ -286,6 +286,7 @@ def propose(principal: Principal, graph: CapabilityGraph, *, source: str, entity
         return existing
 
     connector = registry.get(source)
+    clean_params = connector.normalise_params(entity, operation, clean_params)
     record = connector.get(entity, record_id)
     if record is None:
         raise NotFound(f"{ref} has no record {record_id!r}")

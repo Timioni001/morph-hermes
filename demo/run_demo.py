@@ -119,11 +119,14 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["MORPH_DEMO_DATA_DIR"] = str(app_data)
     os.environ["MORPH_DATA_DIR"] = str(morph_data)
     os.environ.pop("MORPH_CONFIG", None)
+    # The demo runs against the bundled sandbox; a real install connects its own.
+    os.environ["MORPH_CONFIG_FILE"] = str(
+        Path(__file__).resolve().parent.parent / "config" / "connectors.sandbox.json")
 
     from morph.preflight import require
     require()
 
-    print(f"{BOLD}MORPH — software that adapts to you{RESET}")
+    print(f"{BOLD}MORPH — the agent proposes, you approve, the change is verified (offline sandbox){RESET}")
     say(f"{DIM}demo data: {workdir}{RESET}")
 
     processes: list[subprocess.Popen] = []

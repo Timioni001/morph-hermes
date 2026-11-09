@@ -2,22 +2,22 @@ name: morph
 label: MORPH
 version: 1.0.0
 description: >-
-  One adaptive workspace over several independent applications, with human-approved
-  cross-application actions. MORPH introspects each connected application's schema
-  over HTTP, builds a capability graph, interprets a goal stated in plain language,
-  plans a validated declarative interface, resolves it against live data and joins
-  records across application boundaries. Writes are two-step: the agent may only
-  propose, a human approves in the dashboard, and every applied action is verified by
-  re-reading the record from the source application.
+  An approval gate between the agent and the APIs it can write to. MORPH connects to a
+  GitHub repository or any service with an OpenAPI document, learns from the schema what
+  can be read and what can be safely changed, and gives the agent tools to read and to
+  propose. Writes are two-step: the agent may only propose, a human approves in the
+  dashboard seeing the exact before and after, and every applied change is verified by
+  re-reading the record from the API. Everything is kept in a hash-chained audit log.
 author: MORPH contributors
 license: MIT
 homepage: https://github.com/timioni001/morph-hermes
 manifest_version: 2
 requires_hermes: ">=0.19"
 tags:
-  - generative-ui
+  - approvals
+  - human-in-the-loop
   - integrations
-  - operations
+  - github
   - dashboard
 provides_tools:
   - morph_discover
@@ -39,6 +39,6 @@ config_schema:
   config:
     type: object
     description: >-
-      MORPH's connector wiring, cross-application links and roles. Same shape as
-      config/connectors.default.json. Omit it to use
-      <plugin data dir>/config.json, MORPH_CONFIG_FILE, or the bundled default.
+      MORPH's connections, cross-service links and roles. Same shape as
+      config/connectors.sandbox.json. Omit it and manage connections with
+      `hermes morph connect`, which writes <plugin data dir>/config.json.

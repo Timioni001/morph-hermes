@@ -7,7 +7,9 @@ Precedence, highest first:
 3. Hermes plugin config (``ctx.get_config("morph.config")``), when MORPH is
    registered inside a Hermes agent.
 4. ``<plugin data dir>/config.json`` — the operator-editable copy.
-5. ``config/connectors.default.json`` shipped with the plugin (the demo wiring).
+5. Nothing. An unconfigured MORPH is connected to nothing and says so; the
+   sandbox wiring in ``config/connectors.sandbox.json`` is opt-in
+   (``hermes morph connect sandbox``).
 
 Secrets are never part of configuration.  A connector names an environment
 variable and the token is read through Hermes's own profile-aware
@@ -30,7 +32,7 @@ from morph.errors import ConfigError
 from morph.util import ENV_NAME, IDENT, RISK_ORDER, clean_text, is_ref
 
 PLUGIN_NAME = "morph"
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "connectors.default.json"
+SANDBOX_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "connectors.sandbox.json"
 
 # Set by ``register(ctx)`` so configuration can come from Hermes when hosted there.
 _host_config_reader: Optional[Callable[[str, Any], Any]] = None
@@ -257,9 +259,6 @@ def _raw_config() -> tuple[dict[str, Any], str]:
     local = data_dir() / "config.json"
     if local.is_file():
         return _parse(local.read_text(encoding="utf-8"), str(local)), f"file:{local}"
-    if DEFAULT_CONFIG_PATH.is_file():
-        return (_parse(DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"), str(DEFAULT_CONFIG_PATH)),
-                "bundled-default")
     return {}, "empty"
 
 
