@@ -98,7 +98,7 @@ const Tag = ({ children, tone = BLUE, top = 34 }) => (
 /* ── a terminal card that types real output ───────────────────────────────── */
 const Terminal = ({ lines, title }) => {
   const frame = useCurrentFrame();
-  let budget = frame * 2.6;
+  let budget = frame * 4.6;
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", paddingBottom: 70 }}>
       <div style={{ width: 1320, borderRadius: 18, background: "#fff", border: "1px solid rgba(15,23,42,.10)",
@@ -236,7 +236,7 @@ const Film = () => {
       </Scene>
       <Scene from={22.1} to={29.5}>
         <Tag>THE HERMES AGENT, WORKING THROUGH MORPH</Tag>
-        <Terminal title="hermes chat  ·  real session output" lines={[
+        <Terminal title="hermes chat  ·  real session, abridged" lines={[
           { text: '$ hermes chat -q "Triage the GitHub issues… propose each change; do not approve."', bold: true },
           { text: "⚡ morph_discover", color: MUTED, instant: true },
           { text: "⚡ morph_inspect_record  ×4", color: MUTED, instant: true },
@@ -254,7 +254,7 @@ const Film = () => {
 
       <Scene from={35.2} to={43.2}>
         <Tag>PROPOSED BY THE AGENT · NOT APPLIED</Tag>
-        <Window url={HERMES} dark zoom={z(35.2, 43.2, 1.0, 1.2)} ox={0} oy={30}><Clip start={25.2} rate={0.62} /></Window>
+        <Window url={HERMES} dark zoom={z(35.2, 43.2, 1.0, 1.38)} ox={0} oy={16}><Clip start={25.2} rate={0.62} /></Window>
       </Scene>
       <Scene from={43.2} to={50}>
         <Tag tone={INK}>GITHUB, MEANWHILE · 10 OPEN, 0 CLOSED · UNCHANGED</Tag>
@@ -288,8 +288,8 @@ const Film = () => {
       </Scene>
       <Scene from={75.6} to={79.2}>
         <Tag>ANY OPENAPI SERVICE · READ FROM ITS DOCUMENT ALONE</Tag>
-        <Terminal title="real output  ·  public Swagger Petstore" lines={[
-          { text: "$ hermes morph connect openapi https://petstore3.swagger.io/api/v3", bold: true },
+        <Terminal title="MORPH OpenAPI adapter  ·  real output, abridged" lines={[
+          { text: "$ python scripts/check_openapi_connector.py   # public Swagger Petstore", bold: true },
           { text: "1 entity derived from the document alone:", instant: true },
           { text: "  pet   list /pet/findByStatus   record /pet/{petId}", instant: true, color: BLUE },
           { text: "  operations: none — nothing here could be verified", instant: true, color: MUTED },
