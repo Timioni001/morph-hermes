@@ -106,14 +106,14 @@ not the virtual environment is activated in your current shell.
 Then run the whole showcase in one command:
 
 ```bash
-python -m demo.run_demo
+make demo
 ```
 
 It starts three independent applications, composes a workspace from a goal, has the agent
 propose an action, shows the agent refused when it tries to approve, has an operator
 approve it, and then reads the change back out of the source application's own API. It
 exits non-zero if any of that does not hold, so it is an acceptance test as much as a
-demonstration. Add `--serve` to leave everything running and open the dashboard.
+demonstration. `make serve` leaves everything running and opens the dashboard.
 
 ### A recorded run
 

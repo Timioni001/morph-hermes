@@ -74,23 +74,27 @@ npx playwright install --with-deps chromium
 ## 2. Prove it works, in four commands
 
 ```bash
-python -m pytest
+make test
 ```
 
 ```bash
-scripts/e2e.sh
+make e2e
 ```
 
 ```bash
-python -m demo.run_demo
+make demo
 ```
 
 ```bash
-node scripts/build_dashboard.mjs --check
+make bundle
 ```
 
-The first three take about a minute together. `demo/run_demo.py` is the one to watch:
-it exits non-zero if any claim in it fails.
+The first three take about a minute together. `make demo` is the one to watch: it
+exits non-zero if any claim in it fails.
+
+Each of these depends on the install, but the install is stamped — it re-runs only
+when `pyproject.toml` changes, so the second and later commands start immediately
+instead of reinstalling. `make reinstall` forces it if you ever need to.
 
 ---
 
@@ -139,8 +143,8 @@ authenticate the way they would against any real service:
 
 ```bash
 cd ~/morph-hermes
-python -m apps.serve --print-tokens >> ~/.hermes/.env
-python -m apps.serve &          # leave the three applications running
+./.venv/bin/python -m apps.serve --print-tokens >> ~/.hermes/.env
+./.venv/bin/python -m apps.serve &      # leave the three applications running
 ```
 
 ```bash
@@ -171,7 +175,7 @@ then tell you something is waiting — because proposing is the only thing it ca
 
 ```bash
 export MORPH_GITHUB_TOKEN="$(gh auth token)"     # or a PAT with 'repo' scope
-python scripts/check_github_connector.py --repo YOUR-USER/YOUR-REPO --propose
+./.venv/bin/python scripts/check_github_connector.py --repo YOUR-USER/YOUR-REPO --propose
 ```
 
 Read-only: it introspects the schema, reads issues, derives versions from
@@ -207,7 +211,7 @@ for the shot list and what to say over it.
 
 ```bash
 git status                      # the tree must be clean: the SHA is what gets cloned
-python scripts/prepare_catalog_entry.py --write
+./.venv/bin/python scripts/prepare_catalog_entry.py --write
 ```
 
 It stamps the current commit, pins the screenshot URLs to that same SHA, and refuses
@@ -239,3 +243,4 @@ Deadline is **5PM EST on 11 November**.
 | `No module named 'fastapi'` | `pip install -e ".[dev]"` has not run in this venv | run it; every entry point now says so instead of showing a traceback |
 | `pytest` errors mention `/usr/lib/python3.x` | a system `pytest` was found on `PATH` | use `make test`, or `./.venv/bin/python -m pytest` |
 | `error: externally-managed-environment` | the venv is not active in this shell (no `(.venv)` in the prompt) | `make install` — it never needs activation |
+| A `make` target reinstalls every time | `pyproject.toml` is newer than `.venv/.installed` | expected once after a `git pull` that changed it; otherwise `make reinstall` |
