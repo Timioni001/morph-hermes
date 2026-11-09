@@ -173,6 +173,27 @@ for the shot list and what to say over it.
 
 ---
 
+## 7. Submit
+
+```bash
+git status                      # the tree must be clean: the SHA is what gets cloned
+python scripts/prepare_catalog_entry.py --write
+```
+
+It stamps the current commit, pins the screenshot URLs to that same SHA, and refuses
+to stamp a commit you have not pushed — because the catalog CI clones your repository
+at that SHA and a local-only commit fails there, not here.
+
+Then:
+
+1. Fork `NousResearch/hermes-agent`, add the output as `plugin-catalog/morph.yaml`,
+   open the PR. Put the disclosure lines from the entry's `description` in the PR body
+   and attach the screenshots from `docs/assets/`.
+2. Post the demo video on X tagging **@NousResearch** (`docs/DEMO_VIDEO.md`).
+3. Submit both links: **form.typeform.com/to/FwJLvOln**
+
+Deadline is **5PM EST on 11 November**.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -183,3 +204,4 @@ for the shot list and what to say over it.
 | Connector says it needs a credential | token not in the profile environment | `python -m apps.serve --print-tokens >> ~/.hermes/.env` |
 | `localhost` refuses from Windows | service bound to a container address | bind `127.0.0.1` (the default here) |
 | Tests are slow | repository under `/mnt/c` | move it to `~` |
+| `does not appear to be a Python project` | the clone is on the old `main` | `git fetch origin && git checkout main && git pull` |
