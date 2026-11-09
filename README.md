@@ -40,13 +40,47 @@ cannot reach.
 > actually flagged in the Storefront, with the Storefront's own changelog showing who
 > approved it.
 
+### What it connects to
+
+MORPH is not written against any particular application. There are four adapters, and
+the demo applications are only the first of them:
+
+| Kind | What the application has to provide | What it is for |
+|---|---|---|
+| `openapi` | an OpenAPI 3 document | **anything.** Nothing MORPH-specific at all |
+| `http-rest` | a `morph.source.v1` descriptor | an application you control, described exactly |
+| `github` | — | a hand-written adapter for one vendor's API |
+| `memory` | — | an in-process fixture, for tests |
+
+`openapi` is the general case. Point it at the document a service already publishes and
+it derives the entities, their fields and the operations from the schema — a service
+whose authors have never heard of MORPH, driven by it:
+
+```
+Fieldwork — Scheduling for field engineers.
+entity jobs (key id, title reference)
+   W status          enum   ['scheduled', 'en_route', 'on_site', 'complete']
+   W requires_parts  bool
+  · set_status_complete     Status: Complete    effect={'status': 'complete'}  unless: status is already 'complete'
+  · set_requires_parts      Set requires parts  effect={'requires_parts': True}  unless: requires parts is already set
+```
+
+Operations are derived, never invented. MORPH's contract is that an operation states
+what it will change so the change can be verified by re-reading the record afterwards,
+so an `enum` becomes one operation per value, a boolean becomes a matched pair, and
+every other writable field becomes one operation that takes the value as a parameter.
+A `readOnly` field, an identifier and a version field never become operations at all.
+The result is a vocabulary a person can read instead of one "update this record" verb
+that could do anything.
+
+The **GitHub connector** is the other end of the range — an adapter written by hand
+against an API nobody controls. GitHub publishes no MORPH schema, no version field, no
+idempotency header and no change feed in the shape MORPH asks for, and it still slots in
+as one more application in the graph: optimistic concurrency derived from `updated_at`,
+idempotency enforced on MORPH's side, incremental reads as its change feed.
+
 Three demo applications ship with MORPH so the whole thing is reproducible with no
-account and no key. A **GitHub connector** ships alongside them to show the adapter
-contract is not shaped around them: GitHub publishes no MORPH schema, no version field,
-no idempotency header and no change feed in the shape MORPH asks for, and it still slots
-in as one more application in the graph — with optimistic concurrency derived from
-`updated_at`, idempotency enforced on MORPH's side, and incremental reads as its change
-feed. See `docs/CONNECTORS.md`.
+account and no key. See `docs/CONNECTORS.md`.
 
 ![MORPH workspace](docs/assets/catalog-card.png)
 

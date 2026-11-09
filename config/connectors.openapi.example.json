@@ -1,0 +1,20 @@
+{
+  "$comment": "Connect any service that publishes an OpenAPI 3 document. Nothing MORPH-specific is required of it. See docs/CONNECTORS.md.",
+  "allowed_hosts": ["api.example.com"],
+  "connectors": [
+    {
+      "id": "fieldwork",
+      "kind": "openapi",
+      "label": "Fieldwork",
+      "base_url": "https://api.example.com",
+      "token_env": "FIELDWORK_TOKEN",
+      "timeout": 10.0,
+      "options": {
+        "spec_path": "/openapi.json",
+        "exclude": ["audit_events"]
+      }
+    }
+  ],
+  "links": [],
+  "default_role": "operator"
+}

@@ -128,6 +128,37 @@ it.
 
 ---
 
+## The general case: `openapi`
+
+The other adapters ask the application to meet MORPH halfway. This one asks for nothing:
+
+```json
+{ "id": "fieldwork", "kind": "openapi", "label": "Fieldwork",
+  "base_url": "https://api.example.com", "token_env": "FIELDWORK_TOKEN",
+  "options": { "spec_path": "/openapi.json" } }
+```
+
+It looks for the REST shape almost every API already has — `GET /things`,
+`GET /things/{id}`, and `PATCH` or `PUT` on the second — and derives everything from
+there. Entities from the collection paths, fields from the record schema (following
+`$ref`, `allOf`, `anyOf`), writable fields from the patch body's properties.
+
+`options` also takes `entities` (expose only these) and `exclude` (expose all but these).
+
+### What it will not do
+
+- **Nested values are not fields.** MORPH's record model is flat, and a nested object
+  has no honest column.
+- **A collection with no single-record route is not an entity.** If one record cannot be
+  read on its own, no change to it can be verified, so it is read-only data at best.
+- **`readOnly` fields, identifiers and version fields are never writable**, whatever the
+  patch body lists.
+- **No change feed is claimed.** A generic document declares none, so `changes()` reports
+  `supported: false` and the caller falls back to diffing.
+- **Optimistic concurrency is best-effort.** An `ETag` becomes `If-Match`; failing that,
+  a `version` field does. A service with neither gets neither — and MORPH says so rather
+  than implying a guarantee it cannot make. Verified read-back still applies.
+
 ## Worked example: the GitHub connector
 
 `morph/connectors/github.py` is the adapter route done against an API nobody controls,
