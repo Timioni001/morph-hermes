@@ -147,14 +147,18 @@ hermes plugins enable morph
 MORPH declares `dependencies = []`, so `--install-deps` has nothing to install
 for it. `make validate-ci` adds the flag if you want exactly what catalog CI runs.
 
-Give MORPH the demo tokens in the Hermes profile environment, so the connectors can
+Then bring the applications up. One command starts the ones MORPH ships with and
+writes their bearer tokens into the Hermes profile environment, so the connectors
 authenticate the way they would against any real service:
 
 ```bash
-cd ~/morph-hermes
-./.venv/bin/python -m apps.serve --print-tokens >> ~/.hermes/.env
-./.venv/bin/python -m apps.serve &      # leave the three applications running
+hermes morph up
 ```
+
+It only starts what is bundled with MORPH and running on loopback; anything else
+in your configuration — a SaaS API, a service another team runs — it reports and
+leaves alone. Run it again and it says `already up` rather than starting a second
+copy. `--detach` returns instead of holding the terminal.
 
 ```bash
 hermes morph doctor             # configuration, reachability, credentials, storage

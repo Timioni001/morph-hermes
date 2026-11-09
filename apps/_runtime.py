@@ -160,7 +160,7 @@ class AppSpec:
     port: int
     vendor: str = ""
     db_name: str = ""
-    accent: str = "#1d4ed8"
+    accent: str = "#475569"
     entity_map: dict[str, EntitySpec] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:

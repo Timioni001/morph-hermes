@@ -192,7 +192,7 @@ SPEC = AppSpec(
     entities=(ORDERS, CUSTOMERS),
     token_env="MORPH_STOREFRONT_TOKEN",
     port=8811,
-    accent="#1d4ed8",
+    accent="#7c3aed",   # deliberately not MORPH's palette: this is someone else's software
 )
 
 app = build_app(SPEC)

@@ -11,7 +11,7 @@ import json
 import sys
 from typing import Any, Optional
 
-from morph import actions, engine, registry, store, workspace
+from morph import actions, engine, launch, registry, store, workspace
 from morph.actions import Principal
 from morph.config import settings
 from morph.errors import MorphError, PermissionDenied
@@ -93,6 +93,17 @@ def setup_parser(parser: Any) -> None:
     subparsers.add_parser("audit", help="recent audit entries and chain verification")
     subparsers.add_parser("doctor", help="check configuration, reachability and storage")
     subparsers.add_parser("reload", help="re-read configuration and rebuild connectors")
+
+    up = subparsers.add_parser(
+        "up", help="start the applications MORPH ships with and report what is live")
+    up.add_argument("--host", default="127.0.0.1",
+                    help="bind address for the bundled applications (loopback by default)")
+    up.add_argument("--detach", action="store_true",
+                    help="return once they are answering instead of holding the terminal")
+    up.add_argument("--no-env", action="store_true",
+                    help="do not write bearer tokens to the Hermes profile environment")
+    up.add_argument("--timeout", type=float, default=25.0,
+                    help="seconds to wait for each application to answer")
 
     goal = subparsers.add_parser("goal", help="compose or transform the workspace")
     goal.add_argument("text", nargs="+", help="what you want to accomplish")
@@ -292,7 +303,84 @@ def _dispatch(command: str, args: Any, as_json: bool) -> int:  # noqa: C901 - a 
             print(line)
         return 0 if report["ok"] else 1
 
+    if command == "up":
+        return _up(args, as_json)
+
     raise MorphError(f"unknown subcommand {command!r}")
+
+
+def _up(args: Any, as_json: bool) -> int:  # noqa: C901 - one linear procedure
+    """``hermes morph up`` — start what is ours, report what is not."""
+    # Before the survey: an unauthenticated probe cannot tell a running
+    # application from a stopped one, and the survey decides what to start.
+    exports = launch.prime_environment()
+    plans = launch.survey()
+    startable = [plan for plan in plans if plan.actionable]
+
+    written: list[str] = []
+    if not getattr(args, "no_env", False):
+        written = launch.ensure_profile_env(exports)
+
+    children, late = launch.start(plans, host=getattr(args, "host", "127.0.0.1"),
+                                  timeout=float(getattr(args, "timeout", 25.0)))
+    after = launch.survey() if startable else plans
+    live = [plan for plan in after if plan.state == launch.RUNNING]
+
+    if as_json:
+        payload = {
+            "started": [plan.connector_id for plan in startable],
+            "running": [plan.connector_id for plan in live],
+            "not_ours": [{"id": plan.connector_id, "reason": plan.detail}
+                         for plan in after if plan.state == launch.EXTERNAL],
+            "disabled": [plan.connector_id for plan in after
+                         if plan.state == launch.DISABLED],
+            "did_not_answer": late,
+            "env_written": written,
+            "detached": bool(getattr(args, "detach", False)),
+        }
+        _out(payload, True)
+    else:
+        for line in _up_text(after, startable, late, written):
+            print(line)
+
+    if late:
+        launch.stop(children)
+        return 1
+    if not children or getattr(args, "detach", False):
+        return 0
+
+    print("\nCtrl-C to stop them.")
+    try:
+        for child in children:
+            child.wait()
+    except KeyboardInterrupt:
+        print("\nstopping")
+    finally:
+        launch.stop(children)
+    return 0
+
+
+def _up_text(plans: list[Any], startable: list[Any], late: list[str],
+             written: list[str]) -> list[str]:
+    lines = []
+    for plan in plans:
+        if plan.state == launch.RUNNING:
+            was = "started" if any(s.connector_id == plan.connector_id for s in startable) \
+                else "already up"
+            lines.append(f"  up       {plan.label:<12} {plan.base_url}  ({was})")
+        elif plan.state == launch.DISABLED:
+            lines.append(f"  off      {plan.label:<12} {plan.detail}")
+        else:
+            lines.append(f"  not mine {plan.label:<12} {plan.base_url}  — {plan.detail}")
+    for connector_id in late:
+        lines.append(f"  failed   {connector_id} did not answer in time")
+    if written:
+        lines.append(f"  wrote {', '.join(written)} to {launch.hermes_env_path()}")
+    if not any(plan.state == launch.RUNNING for plan in plans):
+        lines.append("Nothing is reachable. `hermes morph doctor` explains why.")
+    else:
+        lines.append("Open the MORPH tab: `hermes dashboard`.")
+    return lines
 
 
 def _print_reload() -> int:

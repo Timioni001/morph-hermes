@@ -175,6 +175,7 @@ depend on nobody ever adding one.
 ## From the terminal
 
 ```bash
+hermes morph up                          # start the bundled applications, wire their tokens
 hermes morph status                      # applications, workspace, pending approvals
 hermes morph discover                    # the full capability graph and your permissions
 hermes morph goal "delayed orders and the complaints about them"
