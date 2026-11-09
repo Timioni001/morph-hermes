@@ -53,30 +53,32 @@ jobs:
   plugin:
     name: Hermes plugin validation
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: morph
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      # PyPI stops at 0.19, which has no `hermes plugins doctor`. Hermes is released
-      # from its repository, and reads its own version from the release tags, so it
-      # is installed from source at the exact commit of the release MORPH is
-      # verified against (v0.23.0), with full history so the tags resolve.
-      - uses: actions/checkout@v4
+      # Hermes is not installable from PyPI at the version MORPH targets (PyPI stops
+      # at 0.19, which has no `hermes plugins doctor`), and not with plain pip either:
+      # it ships its own locked Python toolchain. So this job does what Hermes's own
+      # catalog CI does — check out the exact release commit, with full history so the
+      # version resolves from the tags, and prepare it with Hermes's own setup action.
+      - name: Check out Hermes v0.23.0
+        uses: actions/checkout@v4
         with:
           repository: NousResearch/hermes-agent
           ref: 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19   # v0.23.0
           fetch-depth: 0
-          path: hermes-agent
-      - name: Install Hermes v0.23.0 from source
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ./hermes-agent
-          hermes --version
+          persist-credentials: false
+      - name: Check out MORPH
+        uses: actions/checkout@v4
+        with:
+          path: morph
+          persist-credentials: false
+      - name: Prepare Hermes with its own locked toolchain
+        uses: ./.github/actions/setup-pm
+        with:
+          toolchain: python
+          extras: '[]'
       - name: The installed Hermes is the one the README names
-        run: hermes --version | grep -F "v0.23.0"
+        run: hermes --version | tee /dev/stderr | grep -F "v0.23.0"
       - name: Plugin doctor
         working-directory: morph
         run: hermes plugins doctor . --ci

@@ -1,11 +1,13 @@
 # MORPH
 
-**Let your Hermes agent act on the APIs you use — without letting it act alone.**
+**Software that adapts to you.**
 
-MORPH is a native [Hermes Agent](https://hermes-agent.nousresearch.com) plugin that puts
-an approval gate between the agent and any API it can write to. The agent can read
-everything and *propose* changes. You approve each one, seeing exactly what will change.
-MORPH applies it, then reads the record back from the API to prove it landed.
+MORPH is a native [Hermes Agent](https://hermes-agent.nousresearch.com) plugin that
+turns the applications you use into one adaptive workspace. State a goal and it composes
+an interface for it from live schemas and live data — and lets the agent act there
+without acting alone: the agent can read everything and *propose* changes, you approve
+each one seeing exactly what will change, and MORPH reads the record back from the API
+to prove it landed.
 
 ```bash
 hermes morph connect github your-name/your-repo
@@ -24,7 +26,7 @@ given the token an approval needs.
 It is not GitHub-specific. Point it at any service that publishes an OpenAPI document
 and it derives what can be read and what can be safely changed from the schema alone.
 
-<sub>Verified on Hermes Agent v0.23.0 · 240 unit/integration tests · 39 browser checks ·
+<sub>Verified on Hermes Agent v0.23.0 · 243 unit/integration tests · 39 browser checks ·
 <code>hermes plugins validate</code> clean · MIT</sub>
 
 ![MORPH inside the Hermes dashboard](docs/assets/morph-in-hermes.png)
@@ -391,7 +393,7 @@ suite that executes and a contract that was read.
 
 - Three applications, each with its own SQLite database, bearer token and HTTP API,
   started as independent processes.
-- **240 Python tests** — unit, integration against those running services, and security.
+- **243 Python tests** — unit, integration against those running services, and security.
 - **39 browser checks** in Chromium against the committed bundle and the live API,
   including two mobile viewports.
 - **`make demo`** end to end: discovery, composition, the agent proposing, the agent
@@ -414,18 +416,32 @@ suite that executes and a contract that was read.
   from live data, change feed run twice, a workspace composed, a proposal built then
   rejected without writing anything.
 
-### Covered by tests, not watched live
+### The whole loop, live, against GitHub
 
-- **Model-backed planning.** `plan()` calls `ctx.llm.complete_structured`, validates
-  against `morph.ui.v1`, repairs once, and falls back to the deterministic composer.
-  Five tests exercise that path with a stub LLM — schema-only prompting, one repair
-  attempt, and three distinct failure modes falling back rather than erroring. The
-  Hermes install used for verification has no model credential, so its runs report
-  `deterministic`, which is the fallback behaving correctly. [Two commands close
-  this](#turn-the-ai-planning-on); they need your own free Nous login.
-- **GitHub issue writes.** The connector authenticated and introspected against a real
-  repository, but closing, labelling, retitling and assigning are covered by tests with a
-  recorded transport rather than by changing a real repository.
+Run on 9 November 2026 against the public scratch repository
+[`Timioni001/morph-demo`](https://github.com/Timioni001/morph-demo/issues), ten seeded issues:
+
+- **A real Hermes agent proposed.** `hermes chat` on a free Nous Portal model called
+  `morph_discover`, read the issues with `morph_inspect_record`, and queued four changes
+  with `morph_propose_action`: close #3 and #6 as not planned (duplicates of #1), retitle
+  #7, assign #1. Its reply said they were waiting for approval. GitHub still showed ten
+  open, none closed.
+- **A person approved** each one in the MORPH tab of the Hermes dashboard.
+- **MORPH wrote and verified.** Each proposal ended `applied` with `verified: true` after
+  re-reading the issue; the same four changes were then confirmed separately through the
+  GitHub REST API and on github.com.
+- **Model-planned workspace.** The workspace for *"Triage the open issues"* was composed
+  by that model (`mode: model`). It is a small model and left blocks half-filled; MORPH
+  keeps the blocks that validate, drops the rest and says how many. A second goal failed
+  validation twice and fell back to the deterministic composer, which is the floor
+  working as designed. Plan quality follows the model.
+
+### Covered by tests, not run live
+
+- **`set_labels` and `unassign` on GitHub**, and writes through the **OpenAPI** adapter.
+  The four operations above ran against the real API; these are covered by tests with a
+  recorded transport. The OpenAPI adapter was run live read-only against the public
+  Swagger Petstore.
 
 ---
 

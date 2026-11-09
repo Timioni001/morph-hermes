@@ -23,3 +23,9 @@ node_modules/
 .media/
 plugin-catalog-morph.yaml
 plugin-catalog-pr-body.md
+
+# Film production: sources are committed, captures and renders are not.
+video/footage/
+video/film/public/
+video/film/out/
+video/film/package-lock.json

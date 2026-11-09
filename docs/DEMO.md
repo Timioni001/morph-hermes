@@ -84,24 +84,6 @@ intent header is refused, and that phone and tablet layouts do not overflow.
 
 Screenshots land in `.e2e-artifacts/`.
 
-## The video
+## The film
 
-```bash
-scripts/make_video.sh          # → .media/morph-demo.mp4
-```
-
-Needs `ffmpeg` and a Node `playwright` with Chromium. It brings up a clean stack,
-records a real browser session at 1600×900, and burns in captions from the timings the
-recorder logged as it went.
-
-What is authentic: every frame is a real interaction with the real plugin bundle, the
-real dashboard API and the three real applications. The approval really writes to the
-Storefront; the Storefront's own page is then reloaded in the same browser, and the
-review status and version you see change are that application's own response.
-
-What is added: the caption strip, and a single `scrollIntoView` plus a background tint on
-the row being pointed at, so a viewer can follow where to look. No frame is re-staged,
-no result is simulated, and nothing is cut in a way that changes the order of events.
-
-The MP4 is not committed — it is a 2–3 MB build artefact. Regenerate it with the command
-above.
+See `docs/DEMO_VIDEO.md`.

@@ -112,3 +112,44 @@ def test_every_deterministic_plan_revalidates(graph):
                  "", "   ", "a" * 300]:
         raw = planner.compose_deterministically(goal or "overview", graph)
         validate(raw, graph)
+
+
+def test_the_model_is_only_offered_entities_that_exist(graph):
+    llm = FakeLlm({"title": "t", "summary": "s", "sections": [
+        {"title": "s", "blocks": [{"kind": "metric", "title": "Deals", "entity": "crm.deals"}]}]})
+    planner.plan("anything", graph, llm=llm)
+    block = (llm.calls[0]["json_schema"]["properties"]["sections"]["items"]
+             ["properties"]["blocks"]["items"]["properties"])
+    assert block["entity"]["enum"] == sorted(graph.entities)
+
+
+def test_a_blank_entity_is_filled_only_when_it_has_one_possible_meaning(graph):
+    """A small model's commonest slip must not cost the whole plan — nor be guessed."""
+    blank = {"title": "t", "summary": "s", "sections": [
+        {"title": "s", "blocks": [{"kind": "metric", "title": "Deals", "entity": ""}]}]}
+    # Two entities, no primary named: ambiguous, so it is refused, not guessed.
+    refused = planner.plan("anything", graph, llm=FakeLlm(dict(blank), None))
+    assert refused.mode == "deterministic"
+    # The plan names its own primary entity: one reading, so the model's work stands.
+    named = dict(blank, primary_entity="crm.people")
+    named["sections"] = [{"title": "s", "blocks": [{"kind": "metric", "title": "People",
+                                                    "entity": ""}]}]
+    accepted = planner.plan("anything", graph, llm=FakeLlm(named))
+    assert accepted.mode == "model"
+    assert accepted.schema.blocks[0].entity == "crm.people"
+
+
+def test_one_incomplete_block_does_not_discard_the_rest_of_a_model_plan(graph):
+    """Blocks are kept as written or dropped whole; validation itself is unchanged."""
+    good = [{"kind": "metric", "title": f"Deals {i}", "entity": "crm.deals"} for i in range(4)]
+    plan = {"title": "t", "summary": "s", "sections": [{"title": "s", "blocks": good + [
+        {"kind": "chart", "title": "Broken", "entity": "crm.deals", "group_by": ""}]}]}
+    llm = FakeLlm(plan)
+    result = planner.plan("anything", graph, llm=llm)
+    assert result.mode == "model" and len(llm.calls) == 1
+    assert [b.title for b in result.schema.blocks] == [f"Deals {i}" for i in range(4)]
+    assert any("dropped" in note for note in result.notes)
+    # Too little left to be a workspace: the repair attempt and the floor still apply.
+    thin = {"title": "t", "summary": "s", "sections": [{"title": "s", "blocks": good[:1] + [
+        {"kind": "chart", "title": "Broken", "entity": "crm.deals", "group_by": ""}]}]}
+    assert planner.plan("anything", graph, llm=FakeLlm(thin, None)).mode == "deterministic"

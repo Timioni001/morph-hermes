@@ -9,7 +9,8 @@ repo: https://github.com/timioni001/morph-hermes
 sha: "0000000000000000000000000000000000000000"  # set to the submitted commit
 title: "MORPH"
 description: >-
-  An approval gate between the agent and the APIs it can write to. Connect a GitHub
+  One adaptive workspace across the applications you use, with human-approved,
+  verified actions: an approval gate between the agent and the APIs it can write to. Connect a GitHub
   repository (`hermes morph connect github owner/name`) or any service that publishes
   an OpenAPI document, and MORPH learns from the schema what can be read and what can
   be safely changed. The agent gets tools to read and to propose; it has no tool that

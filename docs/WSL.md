@@ -223,12 +223,7 @@ hermes morph doctor
 
 ## 6. Record the demo
 
-```bash
-scripts/make_video.sh            # → .media/morph-demo.mp4
-```
-
-Needs `ffmpeg` and the Playwright Chromium from step 1. See `docs/DEMO_VIDEO.md`
-for the shot list and what to say over it.
+`docs/DEMO_VIDEO.md` describes how the film is captured and rendered.
 
 ---
 

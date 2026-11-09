@@ -1,0 +1,62 @@
+[
+ {
+  "id": "n1",
+  "at": 0.9,
+  "text": "A.I. can act. But who decides?",
+  "dur": 2.05
+ },
+ {
+  "id": "n2",
+  "at": 8.2,
+  "text": "Morph gives a Hermes agent one adaptive workspace across your applications, and keeps you in control of every change.",
+  "dur": 6.49
+ },
+ {
+  "id": "n3",
+  "at": 18.2,
+  "text": "This is a real GitHub repository, with ten open issues.",
+  "dur": 3.53
+ },
+ {
+  "id": "n4",
+  "at": 22.2,
+  "text": "We ask Hermes to triage them. It reads every issue through Morph, and proposes four changes.",
+  "dur": 5.19
+ },
+ {
+  "id": "n5",
+  "at": 29.6,
+  "text": "Morph composes a workspace for that goal, planned by the model from the live schema.",
+  "dur": 4.55
+ },
+ {
+  "id": "n6",
+  "at": 35.3,
+  "text": "The agent can only propose. Each change waits, with its exact before and after. On GitHub, nothing has moved.",
+  "dur": 6.52
+ },
+ {
+  "id": "n7",
+  "at": 50.2,
+  "text": "A person approves. Morph writes to GitHub, then reads each issue back to verify it.",
+  "dur": 4.82
+ },
+ {
+  "id": "n8",
+  "at": 60.6,
+  "text": "And on GitHub itself: duplicates closed, the title fixed, the bug assigned.",
+  "dur": 4.33
+ },
+ {
+  "id": "n9",
+  "at": 68.2,
+  "text": "Every step lands in a tamper-evident log. Change the goal, and the interface adapts. Any A.P.I. with an Open A.P.I. document connects the same way.",
+  "dur": 8.44
+ },
+ {
+  "id": "n10",
+  "at": 79.4,
+  "text": "Morph. Software that adapts to you. Powered by Hermes Agent.",
+  "dur": 3.74
+ }
+]
