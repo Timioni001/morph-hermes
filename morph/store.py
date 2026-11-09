@@ -21,7 +21,7 @@ from typing import Any, Iterator, Optional
 from morph.config import data_dir
 from morph.util import chain_hash, now
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 _LOCK = threading.RLock()
 _READY: set[str] = set()
 
@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
     context_json TEXT NOT NULL,
     mode TEXT NOT NULL,
     notes_json TEXT NOT NULL,
+    intent_json TEXT NOT NULL DEFAULT '{}',
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS revisions (
     context_json TEXT NOT NULL,
     mode TEXT NOT NULL,
     notes_json TEXT NOT NULL,
+    intent_json TEXT NOT NULL DEFAULT '{}',
     created_at REAL NOT NULL,
     PRIMARY KEY (workspace_id, revision)
 );
@@ -116,10 +118,25 @@ def _connect() -> sqlite3.Connection:
     if key not in _READY:
         with _LOCK:
             connection.executescript(DDL)
+            _add_missing_columns(connection)
             connection.execute("INSERT OR REPLACE INTO meta (key,value) VALUES ('schema_version',?)",
                                (str(SCHEMA_VERSION),))
             _READY.add(key)
     return connection
+
+
+@contextmanager
+def _add_missing_columns(connection: sqlite3.Connection) -> None:
+    """Forward-only migration for databases created by an earlier MORPH.
+
+    Adding a nullable column with a default is the only shape of change this needs
+    so far; anything structural would get a real migration rather than this.
+    """
+    for table, column, ddl in (("workspaces", "intent_json", "TEXT NOT NULL DEFAULT '{}'"),
+                               ("revisions", "intent_json", "TEXT NOT NULL DEFAULT '{}'")):
+        existing = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 @contextmanager

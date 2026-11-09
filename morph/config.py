@@ -156,6 +156,12 @@ class ConnectorConfig:
     enabled: bool = True
     verify_tls: bool = True
     max_records: int = 200
+    # A read-only connector is refused at the connector edge, before any permission
+    # or role question. It is how an operator connects a system they are not willing
+    # to let anything write to, including themselves.
+    read_only: bool = False
+    max_retries: int = 2
+    retry_backoff: float = 0.4
     options: dict[str, Any] = field(default_factory=dict)
 
 
@@ -291,13 +297,21 @@ def _connectors(raw: Any, allow_loopback: bool, allowed_hosts: tuple[str, ...]) 
         max_records = int(item.get("max_records") or 200)
         if not 1 <= max_records <= 2000:
             raise ConfigError(f"connector {cid!r}: max_records must be between 1 and 2000")
+        max_retries = int(item.get("max_retries", 2))
+        if not 0 <= max_retries <= 5:
+            raise ConfigError(f"connector {cid!r}: max_retries must be between 0 and 5")
+        retry_backoff = float(item.get("retry_backoff") or 0.4)
+        if not 0.05 <= retry_backoff <= 5.0:
+            raise ConfigError(f"connector {cid!r}: retry_backoff must be between 0.05 and 5 seconds")
         options = item.get("options") or {}
         if not isinstance(options, dict):
             raise ConfigError(f"connector {cid!r}: options must be an object")
         out.append(ConnectorConfig(
             id=cid, kind=kind, label=clean_text(item.get("label") or cid, 60), base_url=base_url,
             token_env=token_env, timeout=timeout, enabled=bool(item.get("enabled", True)),
-            verify_tls=bool(item.get("verify_tls", True)), max_records=max_records, options=options))
+            verify_tls=bool(item.get("verify_tls", True)), max_records=max_records,
+            read_only=bool(item.get("read_only", False)), max_retries=max_retries,
+            retry_backoff=retry_backoff, options=options))
     return tuple(out)
 
 

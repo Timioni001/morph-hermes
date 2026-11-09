@@ -11,6 +11,8 @@ import subprocess
 import sys
 import urllib.request
 
+from pathlib import Path
+
 import pytest
 
 from morph import actions, engine, registry, resolve, store, workspace
@@ -243,10 +245,21 @@ def test_the_plugin_registers_against_the_real_hermes_contract(live_config):
     spec.loader.exec_module(plugin)
 
     registered: dict[str, dict] = {"tools": {}, "hooks": {}, "commands": {}, "cli": {},
-                                   "prompt": {}}
+                                   "prompt": {}, "skills": {}, "events": [], "messages": []}
 
     class Ctx:
         llm = object()
+
+        def emit(self, event, payload=None):
+            registered["events"].append((event, payload))
+            return 1
+
+        def inject_message(self, content, role="user", **kwargs):
+            registered["messages"].append(content)
+            return True
+
+        def register_skill(self, *, name, path, description="", **kwargs):
+            registered["skills"][name] = (path, description)
 
         def get_config(self, key, default=None):
             return default
@@ -274,11 +287,27 @@ def test_the_plugin_registers_against_the_real_hermes_contract(live_config):
     assert sorted(registered["hooks"]) == sorted(manifest["provides_hooks"])
     assert "morph" in registered["commands"] and "morph" in registered["cli"]
     assert "morph" in registered["prompt"]
+    assert sorted(registered["skills"]) == ["connect-an-application", "operations-triage",
+                                            "verified-change"]
+    for path, description in registered["skills"].values():
+        assert Path(path).is_file() and description
     for _toolset, schema, _handler in registered["tools"].values():
         assert schema["parameters"]["additionalProperties"] is False
     # No registered tool can approve anything.
     assert not any("approve" in name for name in registered["tools"])
+
+    # The outward surfaces are live: proposing emits an event and leaves the operator
+    # a line, because the agent cannot move the action any further on its own.
+    from morph import actions, hostsurface
+    from morph.actions import Principal
+    engine.plan_workspace(Principal.operator("ops@example.com"), "delayed orders")
+    engine.propose(Principal.agent(), source="storefront", entity="orders",
+                   record_id="ORD-2041", operation="flag_for_review",
+                   params={"reason": "late"})
+    assert any(event == "action_proposed" for event, _ in registered["events"])
+    assert any("waiting for your approval" in message for message in registered["messages"])
     hostllm.bind(None)
+    hostsurface.bind(emit=None, notify=None)
 
 
 def test_several_processes_can_open_the_same_demo_database_at_once(tmp_path):

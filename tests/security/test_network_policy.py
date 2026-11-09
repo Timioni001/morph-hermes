@@ -138,3 +138,108 @@ def test_an_oversized_response_is_refused(morph_home, monkeypatch):
     with pytest.raises(Exception) as caught:
         connector.describe(refresh=True)
     assert "bytes" in str(caught.value)
+
+
+def test_a_read_only_connector_refuses_every_write(live_apps, morph_home, monkeypatch):
+    """Read-only is a property of the connection, not of the person: no role, and no
+    configuration of a role, can write through it."""
+    import json
+
+    from morph import engine, registry
+    from morph.actions import Principal
+    from morph.errors import PermissionDenied
+
+    config = live_apps.config()
+    for connector in config["connectors"]:
+        if connector["id"] == "storefront":
+            connector["read_only"] = True
+    for name, token in live_apps.tokens.items():
+        monkeypatch.setenv(f"MORPH_{name.upper()}_TOKEN", token)
+    monkeypatch.setenv("MORPH_CONFIG", json.dumps(config))
+    from morph.config import settings
+    settings.cache_clear()
+    registry.reset()
+    engine.invalidate()
+
+    operator = Principal.operator("ops@example.com")
+    with pytest.raises(PermissionDenied) as caught:
+        engine.propose(operator, source="storefront", entity="orders", record_id="ORD-2041",
+                       operation="flag_for_review", params={"reason": "x"})
+    assert "read-only" in caught.value.message
+
+    # The UI is told up front, rather than letting someone click and fail.
+    verdicts = {v["ref"]: v for v in engine.discover(operator)["permissions"]}
+    assert verdicts["storefront.orders.flag_for_review"]["allowed"] is False
+    # Another application on the same deployment is unaffected.
+    assert verdicts["helpdesk.cases.assign_case"]["allowed"] is True
+    # And even reaching the connector directly is refused.
+    from morph.errors import PermissionDenied as Denied
+    with pytest.raises(Denied):
+        registry.get("storefront").apply("orders", "ORD-2041", "flag_for_review",
+                                         {"reason": "x"}, expected_version=1,
+                                         idempotency_key="k", actor="test")
+
+
+def test_reads_retry_but_writes_without_an_idempotency_key_do_not(morph_home):
+    """A timeout on a write does not tell you whether the source applied it. MORPH
+    only retries a write because it always carries an idempotency key."""
+    import httpx
+
+    from morph.config import ConnectorConfig
+    from morph.connectors.http_rest import HttpRestConnector
+
+    connector = HttpRestConnector(ConnectorConfig(
+        id="flaky", kind="http-rest", label="Flaky", base_url="http://127.0.0.1:1",
+        token_env="", max_retries=2, retry_backoff=0.01))
+    calls: list[str] = []
+
+    class Flaky:
+        def request(self, method, url, **kwargs):
+            calls.append(method)
+            return httpx.Response(503, request=httpx.Request(method, url))
+
+    connector._client = Flaky()
+    connector._checked_base = lambda: "http://127.0.0.1:1"
+
+    status, _ = connector._request("GET", "/v1/things")
+    assert status == 503
+    assert len(calls) == 3                     # the first try plus two retries
+
+    calls.clear()
+    connector._request("POST", "/v1/things/1/operations/x", headers={"Idempotency-Key": "k"})
+    assert len(calls) == 3                     # safe to retry: the key makes it idempotent
+
+    calls.clear()
+    connector._request("POST", "/v1/things/1/operations/x")
+    assert len(calls) == 1                     # no key, no retry
+
+
+def test_a_rate_limited_source_is_waited_out_not_hammered(morph_home):
+    import httpx
+
+    from morph.config import ConnectorConfig
+    from morph.connectors.http_rest import HttpRestConnector
+
+    connector = HttpRestConnector(ConnectorConfig(
+        id="busy", kind="http-rest", label="Busy", base_url="http://127.0.0.1:1",
+        token_env="", max_retries=1, retry_backoff=0.01))
+    seen: list[float] = []
+
+    class Limited:
+        def __init__(self):
+            self.n = 0
+
+        def request(self, method, url, **kwargs):
+            self.n += 1
+            if self.n == 1:
+                return httpx.Response(429, headers={"Retry-After": "0.05"},
+                                      request=httpx.Request(method, url))
+            return httpx.Response(200, json={"items": []}, request=httpx.Request(method, url))
+
+    connector._client = Limited()
+    connector._checked_base = lambda: "http://127.0.0.1:1"
+    status, payload = connector._request("GET", "/v1/things")
+    assert status == 200 and payload == {"items": []}
+    # A Retry-After we cannot parse must not become an unbounded sleep.
+    assert connector._retry_after(httpx.Response(429, headers={"Retry-After": "9999"},
+                                                 request=httpx.Request("GET", "http://x/")), 0) <= 10

@@ -30,7 +30,7 @@ from morph.connectors import netguard
 from morph.connectors.base import (
     ApplyResult, Connector, FetchResult, Predicate, SourceDescriptor,
 )
-from morph.errors import ConfigError, ConnectorError, NotFound, StaleRecord
+from morph.errors import ConfigError, ConnectorError, NotFound, PermissionDenied, StaleRecord
 from morph.util import clean_text
 
 logger = logging.getLogger("morph.connector")
@@ -83,6 +83,7 @@ class HttpRestConnector(Connector):
         self._schema_path = str(options.get("schema_path") or "/morph/schema")
         self._records_path = str(options.get("records_path") or "/v1")
         self._push_filters = str(options.get("filter_style") or "morph") == "morph"
+        self._changes_path = str(options.get("changes_path", "/v1/_changes") or "")
 
     # ───────────────────────────── transport ──────────────────────────────
 
@@ -146,10 +147,7 @@ class HttpRestConnector(Connector):
         url = f"{base}{path}"
         merged = {**self._auth_headers(), **(headers or {})}
         client = self._get_client()
-        try:
-            response = client.request(method, url, params=params, json=body, headers=merged)
-        except Exception as exc:  # noqa: BLE001 - every transport failure is a connector outage
-            raise ConnectorError(f"{self.id!r} is unreachable: {type(exc).__name__}") from exc
+        response = self._send_with_retries(client, method, url, params, body, merged)
         if response.status_code in (301, 302, 303, 307, 308):
             raise ConnectorError(f"{self.id!r} answered with a redirect, which MORPH never follows")
         raw = response.content or b""
@@ -161,6 +159,56 @@ class HttpRestConnector(Connector):
             return response.status_code, json.loads(raw)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise ConnectorError(f"{self.id!r} returned a body that is not JSON") from exc
+
+    def _send_with_retries(self, client: Any, method: str, url: str, params: Any,
+                           body: Any, headers: dict[str, str]) -> Any:
+        """Send one request, retrying only what is safe to retry.
+
+        A read may be retried freely. A write may not — a timeout does not tell you
+        whether the source applied it — except that MORPH gives every write an
+        idempotency key, which is exactly what makes one retry safe. Beyond that:
+        5xx and transport failures back off; 429 waits for ``Retry-After`` when the
+        source names one; 4xx is the source's answer and is never retried.
+        """
+        idempotent = method.upper() == "GET" or "Idempotency-Key" in headers
+        attempts = self.config.max_retries + 1 if idempotent else 1
+        last: Optional[Exception] = None
+        for attempt in range(attempts):
+            try:
+                response = client.request(method, url, params=params, json=body, headers=headers)
+            except Exception as exc:  # noqa: BLE001 - any transport failure is an outage
+                last = exc
+                if attempt + 1 >= attempts:
+                    raise ConnectorError(
+                        f"{self.id!r} is unreachable after {attempt + 1} attempt(s): "
+                        f"{type(exc).__name__}") from exc
+                time.sleep(self._backoff(attempt))
+                continue
+            if response.status_code == 429 and attempt + 1 < attempts:
+                time.sleep(self._retry_after(response, attempt))
+                continue
+            if 500 <= response.status_code < 600 and attempt + 1 < attempts:
+                time.sleep(self._backoff(attempt))
+                continue
+            return response
+        raise ConnectorError(f"{self.id!r} is unreachable: {type(last).__name__ if last else 'unknown'}")
+
+    def _backoff(self, attempt: int) -> float:
+        """Exponential with jitter, capped — and capped again by the request timeout,
+        so a retry budget can never outlast the page load waiting on it."""
+        base = min(self.config.retry_backoff * (2 ** attempt), 4.0)
+        return base * (0.6 + 0.4 * (hash((self.id, attempt)) % 100) / 100.0)
+
+    def _retry_after(self, response: Any, attempt: int) -> float:
+        raw = ""
+        try:
+            raw = response.headers.get("retry-after", "") or ""
+        except Exception:  # noqa: BLE001 - a header we cannot read is a header we ignore
+            raw = ""
+        try:
+            return max(0.0, min(float(raw), 10.0))
+        except (TypeError, ValueError):
+            return self._backoff(attempt)
 
     @staticmethod
     def _detail(payload: Any, fallback: str) -> str:
@@ -257,10 +305,38 @@ class HttpRestConnector(Connector):
             raise ConnectorError(f"{self.id!r} returned HTTP {status} reading {entity}/{record_id}")
         return payload
 
+    def changes(self, since: int = 0) -> dict[str, Any]:
+        """Read the source's own change feed, when it publishes one."""
+        if not self._changes_path:
+            return {"supported": False, "cursor": since, "changes": []}
+        try:
+            status, payload = self._request("GET", self._changes_path,
+                                            params=[("since", str(int(since)))])
+        except ConnectorError:
+            return {"supported": False, "cursor": since, "changes": [],
+                    "error": "the change feed could not be read"}
+        if status == 404:
+            return {"supported": False, "cursor": since, "changes": []}
+        if status != 200 or not isinstance(payload, dict):
+            return {"supported": False, "cursor": since, "changes": [],
+                    "error": f"the change feed returned HTTP {status}"}
+        raw = payload.get("changes")
+        entries = [
+            {"seq": int(c.get("seq") or 0), "entity": str(c.get("entity") or ""),
+             "record_id": str(c.get("record_id") or ""),
+             "operation": clean_text(c.get("operation"), 48),
+             "actor": clean_text(c.get("actor"), 60), "at": c.get("at")}
+            for c in (raw if isinstance(raw, list) else [])[:500] if isinstance(c, dict)]
+        return {"supported": True, "cursor": int(payload.get("cursor") or since),
+                "has_more": bool(payload.get("has_more")), "changes": entries}
+
     # ─────────────────────────────── writes ───────────────────────────────
 
     def apply(self, entity: str, record_id: str, operation: str, params: dict[str, Any], *,
               expected_version: Optional[int], idempotency_key: str, actor: str) -> ApplyResult:
+        if self.config.read_only:
+            raise PermissionDenied(
+                f"connector {self.id!r} is configured read-only; no write reaches it")
         described = self.entity_or_raise(entity)
         if described.operation(operation) is None:
             raise ConnectorError(f"{self.id}.{entity} does not expose operation {operation!r}")

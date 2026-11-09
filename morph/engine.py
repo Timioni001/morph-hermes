@@ -15,7 +15,9 @@ import threading
 import time
 from typing import Any, Optional
 
-from morph import actions, capability, planner, registry, resolve as resolver, store, workspace
+from morph import (
+    actions, capability, planner, registry, resolve as resolver, store, sync, workspace,
+)
 from morph.actions import Authority, Principal
 from morph.capability import CapabilityGraph
 from morph.config import reload_settings, settings
@@ -104,9 +106,14 @@ def plan_workspace(principal: Principal, goal: str, *, llm: Any = None,
                                "previous_selection": (previous["context"] or {}).get("selection", {})}
 
     current = settings()
+    # Interpretation is permission-aware: it can then say "that operation exists but
+    # your role may not run it" instead of "nothing can do that".
+    denied = {entry["ref"]: entry["reason"] for entry in actions.permitted_operations(principal, built)
+              if not entry["allowed"]}
+    reading = planner.interpret(goal, built, denied_operations=denied)
     result = planner.plan(goal, built, llm=llm if current.planner_enabled else None,
                           context=context_for_planner or None,
-                          max_tokens=current.planner_max_tokens)
+                          max_tokens=current.planner_max_tokens, intent=reading)
     if previous and preserve_context:
         context, carried, dropped = workspace.carry_context(previous.get("context") or {},
                                                             result.schema, built)
@@ -119,7 +126,8 @@ def plan_workspace(principal: Principal, goal: str, *, llm: Any = None,
     return {
         "workspace": saved,
         "plan": {"mode": result.mode, "notes": result.notes, "model": result.model,
-                 "attempts": result.attempts},
+                 "attempts": result.attempts,
+                 "intent": result.intent.public() if result.intent else None},
         "transformed_from": ({"goal": previous["goal"], "revision": previous["revision"]}
                              if previous else None),
         "context_carried": carried,
@@ -180,6 +188,8 @@ def state(principal: Principal, *, workspace_id: str = workspace.DEFAULT_WORKSPA
                                       previous_signatures=previous)
         store.save_signatures(workspace_id, resolution.signatures)
         data = resolution.public()
+        if not sync.cursors(workspace_id):
+            sync.poll(workspace_id)  # seed cursors; the first look is history, not news
 
     return {
         "workspace": {**saved, "schema_error": schema_error},
@@ -214,11 +224,18 @@ def refresh_data(principal: Principal, *, workspace_id: str = workspace.DEFAULT_
     if schema is None:
         raise SchemaError("the saved workspace no longer matches the connected applications",
                           detail=schema_error)
+    # Ask each application's own feed first: one small call each, and it sees changes
+    # this workspace never read — including one a person made in the source system.
+    feed = sync.poll(workspace_id)
     previous = store.load_signatures(workspace_id)
     resolution = resolver.resolve(schema, built, context=saved.get("context"),
                                   previous_signatures=previous)
     store.save_signatures(workspace_id, resolution.signatures)
-    return {"changes": resolution.changes, "degraded": resolution.degraded,
+    touched = set(feed["entities_touched"]) | {c["entity"] for c in resolution.changes}
+    affected = [block.id for block in schema.blocks if block.entity in touched]
+    return {"changes": resolution.changes, "source_feed": feed,
+            "affected_blocks": affected,
+            "degraded": resolution.degraded,
             "failures": resolution.failures, "fetched_at": round(resolution.fetched_at, 3),
             "data": resolution.public(), "health": registry.health()}
 

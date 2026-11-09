@@ -2,12 +2,13 @@ name: morph
 label: MORPH
 version: 1.0.0
 description: >-
-  Adaptive, action-capable workspaces composed from the applications Hermes is
-  connected to. MORPH discovers each application's schema over HTTP, builds a
-  capability graph, plans a validated declarative interface for a goal stated in
-  plain language, resolves it against live data, and executes permitted writes only
-  after a human approves them — verifying each one by reading it back from the
-  source application.
+  One adaptive workspace over several independent applications, with human-approved
+  cross-application actions. MORPH introspects each connected application's schema
+  over HTTP, builds a capability graph, interprets a goal stated in plain language,
+  plans a validated declarative interface, resolves it against live data and joins
+  records across application boundaries. Writes are two-step: the agent may only
+  propose, a human approves in the dashboard, and every applied action is verified by
+  re-reading the record from the source application.
 author: MORPH contributors
 license: MIT
 homepage: https://github.com/timioni001/morph-hermes

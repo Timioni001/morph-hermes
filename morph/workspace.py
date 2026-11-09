@@ -27,6 +27,7 @@ def _public(row: Any, *, include_schema: bool = True) -> dict[str, Any]:
     out = {"id": data["id"], "goal": data["goal"], "title": data["title"],
            "revision": data["revision"], "mode": data["mode"],
            "notes": store.loads(data["notes_json"], []),
+           "intent": store.loads(data.get("intent_json"), {}),
            "context": store.loads(data["context_json"], {}),
            "created_at": round(data["created_at"], 3),
            "updated_at": round(data["updated_at"], 3)}
@@ -81,6 +82,7 @@ def save(goal: str, result: PlanResult, *, workspace_id: str = DEFAULT_WORKSPACE
     schema_json = store.dumps(result.schema.public())
     context_json = store.dumps(context or {})
     notes_json = store.dumps(result.notes)
+    intent_json = store.dumps(result.intent.public() if result.intent else {})
     at = now()
     with store.write() as connection:
         row = connection.execute("SELECT revision,created_at FROM workspaces WHERE id=?",
@@ -89,18 +91,19 @@ def save(goal: str, result: PlanResult, *, workspace_id: str = DEFAULT_WORKSPACE
         created = row["created_at"] if row else at
         connection.execute(
             "INSERT INTO workspaces (id,goal,title,revision,schema_json,context_json,mode,"
-            "notes_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+            "notes_json,intent_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
             " ON CONFLICT(id) DO UPDATE SET goal=excluded.goal, title=excluded.title,"
             " revision=excluded.revision, schema_json=excluded.schema_json,"
             " context_json=excluded.context_json, mode=excluded.mode,"
-            " notes_json=excluded.notes_json, updated_at=excluded.updated_at",
+            " notes_json=excluded.notes_json, intent_json=excluded.intent_json,"
+            " updated_at=excluded.updated_at",
             (workspace_id, clean_text(goal, 400), result.schema.title, revision, schema_json,
-             context_json, result.mode, notes_json, created, at))
+             context_json, result.mode, notes_json, intent_json, created, at))
         connection.execute(
             "INSERT OR REPLACE INTO revisions (workspace_id,revision,goal,title,schema_json,"
-            "context_json,mode,notes_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "context_json,mode,notes_json,intent_json,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (workspace_id, revision, clean_text(goal, 400), result.schema.title, schema_json,
-             context_json, result.mode, notes_json, at))
+             context_json, result.mode, notes_json, intent_json, at))
         store.append_audit(connection, actor=actor, authority=authority, role=role,
                            kind="workspace_composed", subject=workspace_id,
                            payload={"goal": clean_text(goal, 200), "revision": revision,
@@ -126,19 +129,22 @@ def restore(workspace_id: str, revision: int, *, actor: str = "system", authorit
         at = now()
         connection.execute(
             "INSERT INTO workspaces (id,goal,title,revision,schema_json,context_json,mode,"
-            "notes_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+            "notes_json,intent_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
             " ON CONFLICT(id) DO UPDATE SET goal=excluded.goal, title=excluded.title,"
             " revision=excluded.revision, schema_json=excluded.schema_json,"
             " context_json=excluded.context_json, mode=excluded.mode,"
-            " notes_json=excluded.notes_json, updated_at=excluded.updated_at",
+            " notes_json=excluded.notes_json, intent_json=excluded.intent_json,"
+            " updated_at=excluded.updated_at",
             (workspace_id, row["goal"], row["title"], next_revision, row["schema_json"],
              row["context_json"], f"restored:{revision}", row["notes_json"],
+             row["intent_json"] if "intent_json" in row.keys() else "{}",
              head["created_at"] if head else at, at))
         connection.execute(
             "INSERT OR REPLACE INTO revisions (workspace_id,revision,goal,title,schema_json,"
-            "context_json,mode,notes_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "context_json,mode,notes_json,intent_json,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (workspace_id, next_revision, row["goal"], row["title"], row["schema_json"],
-             row["context_json"], f"restored:{revision}", row["notes_json"], at))
+             row["context_json"], f"restored:{revision}", row["notes_json"],
+             row["intent_json"] if "intent_json" in row.keys() else "{}", at))
         store.append_audit(connection, actor=actor, authority=authority, role=role,
                            kind="workspace_restored", subject=workspace_id,
                            payload={"from_revision": revision, "revision": next_revision})

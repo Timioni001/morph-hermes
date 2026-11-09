@@ -85,23 +85,44 @@ async function main() {
   check("the join actually pulled related records across", relatedChips > 0,
         relatedChips + " related chip(s)");
 
-  // ── 4. bar chart geometry reflects the data ─────────────────────────────────
-  // Bars grow from zero width; let that animation settle before measuring one.
-  await page.evaluate(() => Promise.all(
-    document.getAnimations()
-      .filter((a) => (a.animationName || "") === "mo-grow")
-      .map((a) => a.finished)));
-  const bars = await page.locator(".mo-bar-fill").evaluateAll(
-    (nodes) => nodes.map((n) => ({
-      pct: parseFloat(n.style.width),
-      px: n.getBoundingClientRect().width,
-      track: n.parentElement.getBoundingClientRect().width
-    })));
-  check("the chart's longest bar is several times the shortest",
-        bars.length >= 2 && bars[0].pct / bars[bars.length - 1].pct > 3,
-        bars.map((b) => Math.round(b.pct) + "%/" + Math.round(b.px) + "px").join(" "));
-  check("the bars are actually laid out (non-zero width)",
-        bars.length >= 2 && bars[0].px > 10, JSON.stringify(bars[0] || {}));
+  // ── 4. a review goal lays the queue out as a board ──────────────────────────
+  const board = page.locator(".mo-card", { hasText: "by follow-up" }).first();
+  check("a review goal produced a board", await board.count() > 0);
+  const lanes = await page.locator(".mo-lane").count();
+  check("the board has more than one populated lane", lanes >= 2, String(lanes));
+  const laneTitles = await page.locator(".mo-lane-title").allTextContents();
+  check("the board groups by a dimension the application lets you change",
+        laneTitles.length >= 2, laneTitles.join(", "));
+
+  // Charts are only present for some goals; measure one when it is there.
+  if (await page.locator(".mo-bar-fill").count() >= 2) {
+    await page.evaluate(() => Promise.all(
+      document.getAnimations()
+        .filter((a) => (a.animationName || "") === "mo-grow")
+        .map((a) => a.finished)));
+    const bars = await page.locator(".mo-bar-fill").evaluateAll(
+      (nodes) => nodes.map((n) => ({ pct: parseFloat(n.style.width),
+                                     px: n.getBoundingClientRect().width })));
+    check("the chart bars are laid out proportionally",
+          bars[0].px > 10 && bars[0].pct >= bars[bars.length - 1].pct,
+          bars.map((b) => Math.round(b.pct) + "%").join(" "));
+  }
+
+  // ── 4b. tables are usable, not decorative ──────────────────────────────────
+  const ordersTableEarly = page.locator(".mo-card", { hasText: "Orders needing attention" })
+    .first();
+  const beforeFilter = await ordersTableEarly.locator("tbody tr").count();
+  await ordersTableEarly.locator("input.mo-search").fill("ORD-2045");
+  await page.waitForTimeout(250);
+  const afterFilter = await ordersTableEarly.locator("tbody tr").count();
+  check("the table search narrows the rows client-side",
+        afterFilter === 1 && beforeFilter > 1, `${beforeFilter} → ${afterFilter}`);
+  await ordersTableEarly.locator("input.mo-search").fill("");
+  await page.waitForTimeout(250);
+  await ordersTableEarly.locator("th.sortable", { hasText: "Hours Late" }).first().click();
+  await page.waitForTimeout(250);
+  const sorted = await ordersTableEarly.locator("tbody tr td.num").first().textContent();
+  check("clicking a column header sorts the rows", sorted.trim().startsWith("30"), sorted);
 
   await shot(page, "01-composed");
 
@@ -127,6 +148,14 @@ async function main() {
   await page.waitForSelector("[role=dialog]", { timeout: 10000 });
   await page.locator("[role=dialog] textarea").first().fill("75 hours late and the customer is chasing");
   await page.getByRole("button", { name: "Propose for approval" }).click();
+  await page.waitForTimeout(900);
+
+  // Approvals are their own surface; the workspace only nudges you to it.
+  check("the workspace flags that something is waiting",
+        (await page.locator(".mo-notice", { hasText: "waiting for your approval" }).count()) > 0);
+  check("the rail badges the pending count",
+        (await page.locator(".mo-rail-badge").first().textContent()) === "1");
+  await page.getByRole("button", { name: "Approvals" }).first().click();
   await page.waitForSelector(".mo-approval", { timeout: 15000 });
 
   const stillClean = await (await fetch(STOREFRONT + "/v1/orders/ORD-2045", {
@@ -136,7 +165,7 @@ async function main() {
         stillClean.review_status === "none" && stillClean._version === before._version,
         `${stillClean.review_status} v${stillClean._version}`);
 
-  const card = page.locator(".mo-approval", { hasText: "flag for review" }).first();
+  const card = page.locator(".mo-approval").first();
   const diff = await card.textContent();
   check("the approval card shows the promised before/after",
         diff.includes("None") || diff.includes("none") || diff.includes("flagged"),
@@ -168,17 +197,54 @@ async function main() {
         JSON.stringify(history.entries[0] || {}).slice(0, 120));
   await shot(page, "03-applied");
 
+  // ── 6b. the other surfaces ──────────────────────────────────────────────────
+  await page.getByRole("button", { name: "Connections" }).first().click();
+  await page.waitForTimeout(500);
+  const connText = await page.locator(".mo-view").first().textContent();
+  check("Connections lists every application with its entities",
+        connText.includes("storefront.orders") && connText.includes("helpdesk.cases")
+        && connText.includes("warehouse.stock_items"));
+  check("Connections shows the cross-application joins",
+        connText.includes("helpdesk.cases.order_ref"));
+  check("Connections shows a denied operation and the reason",
+        connText.includes("storefront.orders.issue_refund")
+        && connText.toLowerCase().includes("denied"));
+
+  await page.getByRole("button", { name: "Activity" }).first().click();
+  await page.waitForTimeout(500);
+  const activityText = await page.locator(".mo-view").first().textContent();
+  check("Activity verifies the audit chain", activityText.includes("Audit chain intact"));
+  check("Activity shows the evidence behind an applied action",
+        activityText.includes("verified: yes") && activityText.includes("changed:"),
+        activityText.slice(0, 120).replace(/\s+/g, " "));
+
+  await page.getByRole("button", { name: "Context" }).first().click();
+  await page.waitForTimeout(500);
+  const contextText = await page.locator(".mo-view").first().textContent();
+  check("Context shows how MORPH read the goal",
+        contextText.includes("How MORPH read that") && contextText.includes("storefront.orders"));
+  check("Context explains why an entity is in focus",
+        /narrowed by|named in the goal/.test(contextText));
+  await shot(page, "05-context");
+
+  await page.getByRole("button", { name: "Workspace" }).first().click();
+  await page.waitForSelector("#mo-goal-input", { timeout: 10000 });
+
   // ── 7. transformation preserves context ─────────────────────────────────────
+  // Wait on the revision counter, not on a toast: toasts from earlier steps look
+  // identical and would let the assertions read the previous workspace.
+  const revisionBefore = await page.locator(".mo-topbar .mo-card-sub").first().textContent();
   await page.fill("#mo-goal-input", "Show stock running low and the restocks I should request");
   await page.getByRole("button", { name: /Transform workspace/ }).click();
-  await page.waitForFunction(() => {
-    const nodes = Array.from(document.querySelectorAll(".mo-toast-title"));
-    return nodes.some((n) => /Workspace transformed/.test(n.textContent));
-  }, null, { timeout: 30000 });
+  await page.waitForFunction((previous) => {
+    const node = document.querySelector(".mo-topbar .mo-card-sub");
+    return node && node.textContent !== previous;
+  }, revisionBefore, { timeout: 30000 });
   await waitForWorkspace(page);
   const newSections = await page.locator(".mo-section-title").allTextContents();
+  const viewText = await page.locator(".mo-view").first().textContent();
   check("the workspace rebuilt around the new goal",
-        (await page.locator(".mo-card", { hasText: "Stock items" }).count()) > 0,
+        viewText.includes("warehouse.stock_items"),
         newSections.join(" / "));
   check("the earlier selection survived the transformation",
         (await page.locator(".mo-card", { hasText: "Orders in scope" }).first()
@@ -226,7 +292,10 @@ async function main() {
     const overflow = await mobilePage.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`${name}: no horizontal page overflow`, overflow <= 1, String(overflow));
-    await mobilePage.screenshot({ path: path.join(SHOTS, "05-" + name + ".png"), fullPage: true });
+    const railVisible = await mobilePage.locator(".mo-rail-btn").first().isVisible();
+    check(`${name}: the section rail is reachable`, railVisible);
+    await mobilePage.screenshot({ path: path.join(SHOTS, "06-" + name + ".png"),
+                                  fullPage: true });
     await mobile.close();
   }
 

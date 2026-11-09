@@ -41,7 +41,7 @@ from morph.errors import (
     ApprovalRequired, Conflict, MorphError, NotFound, PermissionDenied, RateLimited,
     SchemaError, StaleRecord, VerificationFailed,
 )
-from morph import store
+from morph import hostsurface, store
 from morph.util import clean_text, match_pattern, now, risk_at_most
 
 PROPOSAL_STATUSES = ("pending", "applying", "applied", "unverified", "failed", "rejected",
@@ -128,7 +128,16 @@ def reset_rate_limits() -> None:
 # ──────────────────────────────── permissions ──────────────────────────────────
 
 def authorize(principal: Principal, op_ref: str, risk: str) -> None:
-    """Raise :class:`PermissionDenied` unless *principal* may run *op_ref*."""
+    """Raise :class:`PermissionDenied` unless *principal* may run *op_ref*.
+
+    The connector's own read-only setting is checked first and no role overrides it:
+    it is a property of the connection, not of the person.
+    """
+    source = op_ref.split(".", 1)[0]
+    config = settings().connector(source)
+    if config is not None and config.read_only:
+        raise PermissionDenied(
+            f"connector {source!r} is connected read-only; no action against it can be proposed")
     role = principal.role
     for pattern in role.deny:
         if match_pattern(pattern, op_ref):
@@ -310,6 +319,18 @@ def propose(principal: Principal, graph: CapabilityGraph, *, source: str, entity
                                     "params": clean_params, "predicted": predicted,
                                     "before": before, "risk": descriptor.risk})
         row = connection.execute("SELECT * FROM proposals WHERE id=?", (proposal_id,)).fetchone()
+
+    hostsurface.emit("action_proposed", {
+        "proposal": proposal_id, "operation": op_ref, "record": record_id,
+        "risk": descriptor.risk, "requested_by": principal.id,
+        "authority": principal.authority.value})
+    if principal.authority is Authority.AGENT:
+        # The agent cannot approve, so the only way this moves is if a person is
+        # told. One line, in their session, naming what is waiting.
+        hostsurface.notify(
+            f"MORPH: {op_ref} on {record_id} is waiting for your approval "
+            f"({descriptor.risk} risk). Approve or reject it in the MORPH dashboard tab.")
+
     # The confirmation token is the thing an approval must present, so it is handed
     # only to operator-authority callers (the authenticated dashboard). An agent
     # receives the proposal and is told a token exists, which is all it needs to ask
@@ -474,6 +495,11 @@ def approve(principal: Principal, graph: CapabilityGraph, proposal_id: str, *,
                                     "replayed": applied.replayed,
                                     "verified": verification["verified"],
                                     "mismatches": verification.get("mismatches", [])})
+    hostsurface.emit("action_applied", {
+        "proposal": proposal_id, "operation": op_ref, "record": proposal["record_id"],
+        "status": status, "verified": verification["verified"],
+        "approved_by": principal.id, "changed": applied.changed})
+
     out = get_proposal(proposal_id)
     if not verification["verified"]:
         raise VerificationFailed(

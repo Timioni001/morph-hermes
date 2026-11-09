@@ -2,27 +2,38 @@
 #
 # Copy this file into hermes-agent/plugin-catalog/morph.yaml in a PR, with `sha`
 # set to the exact commit being submitted (the catalog rejects branches and short
-# SHAs). Everything here is checked against the code at that commit by
-# `hermes plugins validate`.
+# SHAs) and the image/screenshot URLs re-pinned to that same SHA. Everything here
+# is checked against the code at that commit by `hermes plugins validate`.
 name: morph
 repo: https://github.com/timioni001/morph-hermes
 sha: "0000000000000000000000000000000000000000"  # set to the submitted commit
 title: "MORPH"
 description: >-
-  Adaptive, action-capable workspaces composed from the applications Hermes is
-  connected to. MORPH introspects each connected application's schema over HTTP,
-  builds a capability graph, plans a validated declarative interface for a goal
-  stated in plain language, resolves it against live data, and joins records
-  across applications. Writes are two-step: the agent may only propose, a human
-  approves in the MORPH dashboard tab, and every applied action is verified by
-  reading the record back from the source application. Disclosure — MORPH makes
-  outbound HTTPS calls to the applications the operator configures (loopback only
-  with an explicit opt-in), stores workspaces, pending proposals and a
-  hash-chained audit log in its own plugin-data SQLite database, reads connector
-  bearer tokens through agent.secret_scope by environment-variable name, and
-  calls the host model through ctx.llm for interface planning with a
-  deterministic offline fallback. No telemetry, no background processes, no shell
-  commands, no self-updating code.
+  One adaptive workspace over several independent applications, with human-approved
+  cross-application actions. MORPH introspects each connected application's schema
+  over HTTP, builds a capability graph, interprets a goal stated in plain language
+  (and says what it could not cover — including an operation that exists but your
+  role may not run), plans a validated declarative interface, resolves it against
+  live data and joins records across application boundaries. It renders metrics,
+  sortable tables, charts, a kanban board grouped by a dimension the application
+  actually lets you change, timelines, forms and contextual actions across five
+  views: Workspace, Connections, Approvals, Activity and Context. Writes are
+  two-step — the agent may only propose, a human approves in the dashboard, and
+  every applied action is verified by re-reading the record from the source
+  application before it is called done. Each application publishes a change feed, so
+  MORPH also sees edits made directly in the source system and attributes them.
+  Disclosure — MORPH makes outbound HTTPS calls to the applications the operator
+  configures (loopback only with an explicit opt-in; private, link-local, reserved
+  and cloud-metadata targets are refused, redirects are never followed, and the
+  address actually dialled is validated at connect time); it stores workspaces,
+  pending proposals, read cursors and a hash-chained audit log in its own
+  plugin-data SQLite database; it reads connector bearer tokens through
+  agent.secret_scope by environment-variable name and never logs or returns them;
+  it calls the host model through ctx.llm for interface planning with a
+  deterministic offline fallback, and sends the model schema only, never a record
+  value. No telemetry, no background processes, no shell commands, no self-updating
+  code. Ships three read-only workflow skills and three demo applications so the
+  whole thing is reproducible locally with no account and no key.
 maintainer: timioni001
 tier: community
 category: tools
@@ -31,6 +42,13 @@ version: "1.0.0"
 docs_url: https://github.com/timioni001/morph-hermes#readme
 readme: true
 platforms: []
+# Re-pin these to the submitted SHA before opening the PR.
+# image: https://raw.githubusercontent.com/timioni001/morph-hermes/<sha>/docs/assets/catalog-card.png
+# screenshots:
+#   - https://raw.githubusercontent.com/timioni001/morph-hermes/<sha>/docs/assets/workspace.png
+#   - https://raw.githubusercontent.com/timioni001/morph-hermes/<sha>/docs/assets/approvals.png
+#   - https://raw.githubusercontent.com/timioni001/morph-hermes/<sha>/docs/assets/connections.png
+#   - https://raw.githubusercontent.com/timioni001/morph-hermes/<sha>/docs/assets/context.png
 capabilities:
   provides_tools:
     - morph_discover

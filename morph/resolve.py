@@ -211,6 +211,53 @@ def _resolve_block(block: Block, graph: CapabilityGraph, reader: _Reader,
                 "aggregate": block.aggregate, "unit": block.unit,
                 "points": points[:block.limit], "sample_size": len(read.records)}
 
+    if block.kind == "board":
+        read = reader.read(block.entity, predicates, block.limit)
+        descriptor = entity.field(block.group_by)
+        order: list[str] = []
+        if descriptor is not None and descriptor.values:
+            order = list(descriptor.values)
+        elif descriptor is not None and descriptor.type == "bool":
+            order = ["true", "false"]
+        lanes: dict[str, list[dict[str, Any]]] = {key: [] for key in order}
+        for record in read.records:
+            raw = record.get(block.group_by)
+            key = ("true" if raw else "false") if isinstance(raw, bool) else (
+                "—" if raw is None else clean_text(raw, 40))
+            lanes.setdefault(key, []).append(record)
+        return {"group_by": block.group_by, "columns": list(block.columns),
+                "primary_key": entity.primary_key, "title_field": entity.title_field,
+                "lanes": [{"key": key, "label": key.replace("_", " ").title(),
+                           "count": len(rows),
+                           "cards": [{"id": str(r.get(entity.primary_key)),
+                                      "title": clean_text(r.get(entity.title_field)
+                                                          or r.get(entity.primary_key), 60),
+                                      "fields": _project(r, block.columns)}
+                                     for r in rows[:12]]}
+                          for key, rows in lanes.items()],
+                "total": read.total, "truncated": read.truncated,
+                "row_actions": _operation_specs(entity, block.row_actions),
+                "selected": selection.get(block.entity, "")}
+
+    if block.kind == "timeline":
+        read = reader.read(block.entity, predicates, entity.max_page_size)
+        dated = [r for r in read.records if r.get(block.time_field)]
+        dated.sort(key=lambda r: str(r.get(block.time_field)), reverse=True)
+        items = []
+        for record in dated[:block.limit]:
+            items.append({
+                "id": str(record.get(entity.primary_key)),
+                "at": record.get(block.time_field),
+                "label": clean_text(record.get(block.label_field)
+                                    or record.get(entity.primary_key), 80),
+                "status": record.get(block.status_field) if block.status_field else None,
+            })
+        return {"time_field": block.time_field, "label_field": block.label_field,
+                "status_field": block.status_field, "items": items,
+                "total": read.total, "undated": len(read.records) - len(dated),
+                "row_actions": _operation_specs(entity, block.row_actions),
+                "selected": selection.get(block.entity, "")}
+
     if block.kind == "detail":
         record = _selected_record(block, entity, reader, selection, predicates)
         if record is None:

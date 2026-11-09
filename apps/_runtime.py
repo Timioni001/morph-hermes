@@ -404,6 +404,31 @@ def build_app(spec: AppSpec) -> FastAPI:
             "entities": [e.public() for e in spec.entities],
         }
 
+    @app.get("/v1/_changes")
+    def changes(
+        since: int = Query(default=0, ge=0),
+        limit: int = Query(default=200, ge=1, le=1000),
+        _: str = Depends(require_token),
+    ) -> dict[str, Any]:
+        """Everything this application has changed since sequence *since*.
+
+        A consumer that keeps the cursor can ask "what moved?" in one cheap call
+        instead of re-reading every record, which is the difference between polling
+        that scales and polling that does not.
+        """
+        with _connect(spec) as db:
+            rows = db.execute(
+                "SELECT seq,entity,record_id,operation,at,actor FROM changelog"
+                " WHERE seq > ? ORDER BY seq ASC LIMIT ?", (since, limit)).fetchall()
+            head = db.execute("SELECT COALESCE(MAX(seq),0) FROM changelog").fetchone()[0]
+        return {
+            "application": spec.id, "since": since, "cursor": head,
+            "has_more": bool(rows) and rows[-1]["seq"] < head,
+            "changes": [{"seq": r["seq"], "entity": r["entity"], "record_id": r["record_id"],
+                         "operation": r["operation"], "at": round(r["at"], 3),
+                         "actor": r["actor"]} for r in rows],
+        }
+
     @app.get("/v1/{entity_name}")
     def list_records(
         entity_name: str,

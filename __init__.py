@@ -29,7 +29,7 @@ if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
 from morph import cli as morph_cli  # noqa: E402
-from morph import config, engine, hostllm, schemas, store, tools  # noqa: E402
+from morph import config, engine, hostllm, hostsurface, schemas, store, tools  # noqa: E402
 from morph.actions import Principal, expire_overdue  # noqa: E402
 from morph.errors import MorphError  # noqa: E402
 from morph.util import clean_text  # noqa: E402
@@ -158,6 +158,14 @@ def register(ctx) -> None:  # noqa: ANN001 - Hermes passes its PluginContext
     except Exception as exc:  # noqa: BLE001
         logger.info("MORPH has no host model access; planning will be deterministic (%s)", exc)
 
+    # Outward surfaces: an event other plugins can subscribe to, and a line in the
+    # operator's session when the agent leaves something for them to approve.
+    try:
+        hostsurface.bind(emit=lambda event, payload: ctx.emit(event, payload),
+                         notify=lambda text: ctx.inject_message(text, role="user"))
+    except Exception as exc:  # noqa: BLE001 - an older host may offer neither
+        logger.info("MORPH has no event or notification surface: %s", exc)
+
     handlers = tools.build_handlers()
     for name, schema in schemas.TOOLS.items():
         ctx.register_tool(name=name, toolset=TOOLSET, schema=schema, handler=handlers[name])
@@ -170,7 +178,8 @@ def register(ctx) -> None:  # noqa: ANN001 - Hermes passes its PluginContext
         except Exception as exc:  # noqa: BLE001 - an older host may not offer every hook
             logger.info("MORPH could not register the %s hook: %s", hook, exc)
 
-    for register_extra in (_register_command, _register_cli, _register_prompt_section):
+    for register_extra in (_register_command, _register_cli, _register_prompt_section,
+                           _register_skills):
         try:
             register_extra(ctx)
         except Exception as exc:  # noqa: BLE001 - optional surfaces never block the tools
@@ -194,3 +203,22 @@ def _register_cli(ctx) -> None:  # noqa: ANN001
 
 def _register_prompt_section(ctx) -> None:  # noqa: ANN001
     ctx.register_system_prompt_section(id="morph", content=schemas.SYSTEM_PROMPT_SECTION)
+
+
+# Read-only workflow guides, resolvable as ``morph:<name>`` and listed in the
+# session's available skills. They are how the agent learns MORPH's discipline
+# (propose, wait, verify) without that discipline having to fit in a tool description.
+BUNDLED_SKILLS = (
+    ("operations-triage", "Work a backlog that spans several connected applications."),
+    ("connect-an-application", "Connect a new application to MORPH, or write an adapter."),
+    ("verified-change", "Propose, wait for a human, then verify from the source."),
+)
+
+
+def _register_skills(ctx) -> None:  # noqa: ANN001
+    for name, description in BUNDLED_SKILLS:
+        path = PLUGIN_ROOT / "skills" / name / "SKILL.md"
+        if not path.is_file():
+            logger.info("MORPH skill %s is missing at %s; skipping", name, path)
+            continue
+        ctx.register_skill(name=name, path=path, description=description)

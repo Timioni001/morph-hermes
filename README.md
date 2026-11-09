@@ -8,15 +8,44 @@ get done — and lets you act on them from that workspace, with a human approvin
 write and the result verified in the application that owns the record.
 
 Tell it *"work through delayed orders and the complaints about them"*. MORPH reads the
-schemas of the applications it is connected to, works out which entities, fields and
-operations that goal is about, composes an interface from them, fills it with data read
-live from each application, joins records across application boundaries, and offers only
-the actions your role is actually permitted to take. Change the goal and the workspace
-changes with it, carrying your selection and your filters over.
+schemas of the applications it is connected to, works out what that goal is actually
+about, composes an interface from them, fills it with data read live from each
+application, joins records across application boundaries, and offers only the actions
+your role is permitted to take. Change the goal and the workspace changes with it,
+carrying your selection and your filters over.
 
-It is not a dashboard builder, a chat wrapper or a set of preset layouts. There is no
-layout in this repository. Every workspace is composed at request time from whatever the
-connected applications happen to publish.
+There is no layout in this repository. Every workspace is composed at request time from
+whatever the connected applications happen to publish.
+
+## Why this is a plugin, and not a prompt or a skill
+
+A prompt can describe a dashboard. A skill can teach an agent a workflow. Neither can:
+
+- **hold a capability graph** introspected from live third-party APIs, and refuse any
+  plan naming a field or operation that is not in it;
+- **enforce an approval boundary the model cannot cross** — the agent is never handed
+  the confirmation token an approval requires, and a `pre_tool_call` hook closes the
+  `morph_` namespace so no other plugin can hand it one;
+- **write to a system of record** with optimistic concurrency and an idempotency key,
+  then **re-read it and compare against what the operation promised** before anyone is
+  told it worked;
+- **keep a hash-chained audit log** that detects its own tampering;
+- **see a change someone else made** in the source application and reconcile it.
+
+All of that is server-side state and authority. It is the part of the problem a prompt
+cannot reach.
+
+> If you are looking at this next to a generative-UI plugin: those draw the answer.
+> MORPH operates the systems. The demo is not a rendered chart — it is an order that is
+> actually flagged in the Storefront, with the Storefront's own changelog showing who
+> approved it.
+
+![MORPH workspace](docs/assets/catalog-card.png)
+
+<p align="center">
+  <img src="docs/assets/approvals.png" width="49%" alt="Approvals: the before and after the source application itself promised">
+  <img src="docs/assets/context.png" width="49%" alt="Context: how MORPH read the goal, and what carried over">
+</p>
 
 ---
 
@@ -26,12 +55,26 @@ connected applications happen to publish.
 |---|---|
 | **Discovers applications** | Each connector introspects a live schema: entities, field types, enum domains, declared operations with their parameters, effects, preconditions and risk. |
 | **Builds a capability graph** | Schema only — no record values. Intra-application relationships come from the applications; cross-application links are declared by the operator, and MORPH traverses both. |
-| **Plans an interface** | The goal plus the graph go to the host model through `ctx.llm` with a JSON schema. The result is validated; validation errors are fed back for one repair attempt; a relevance-scoring composer is the floor, and runs unchanged with no model at all. |
-| **Validates the plan** | `morph.ui.v1` can only name entities, fields, enum values, relationships and operations that exist. There is no field anywhere in the schema that can hold markup, a URL or an expression. |
+| **Interprets the goal** | A dedicated stage reads *what kind of work* is being asked for (review, analyse, monitor, act), which entities it is about and why, which filters the words imply — and says out loud what it could **not** cover, including an operation that exists but your role may not run. |
+| **Plans an interface** | The goal, the graph and that reading go to the host model through `ctx.llm` with a JSON schema. The result is validated; validation errors are fed back for one repair attempt; a relevance-scoring composer is the floor, and runs unchanged with no model at all. |
+| **Validates the plan** | `morph.ui.v1` can only name entities, fields, enum values, relationships and operations that exist. No field anywhere in the schema can hold markup, a URL or an expression. |
+| **Renders something usable** | Metrics, sortable and searchable tables, charts, a kanban board grouped by a dimension the application lets you *change*, timelines, detail panes, forms, contextual actions and cross-application relation views. |
 | **Resolves it live** | One pass, deduplicated reads, in-process aggregation, cross-application joins, per-block error isolation and a `degraded` flag when something is missing. |
-| **Detects change** | Each read yields a signature over record ids and versions, so the next pass reports exactly what was added, removed or modified. |
+| **Stays in sync both ways** | Each application publishes a change feed; MORPH keeps a cursor, so a refresh is one small call per application and it catches edits made **directly in the source system**, attributed to whoever made them. Signature diffing is the floor for sources with no feed. |
 | **Executes, carefully** | Propose → human approves → write with `If-Match` and an idempotency key → re-read the record from the source → compare with what the operation promised. Anything less is reported as `unverified`, never as success. |
-| **Keeps a tamper-evident log** | Every proposal, approval, rejection, failure and composition is hash-chained; `hermes morph audit` verifies the chain. |
+| **Keeps a tamper-evident log** | Every proposal, approval, rejection, failure and composition is hash-chained; the Activity view verifies the chain and shows the evidence behind each action. |
+
+## Five surfaces
+
+MORPH is one dashboard tab with five views, because they answer five different questions:
+
+| View | Answers |
+|---|---|
+| **Workspace** | What am I working on? The composed interface, live. |
+| **Connections** | What am I connected to, what can it do, and what may *I* do there? |
+| **Approvals** | What needs a person? Each with the before/after the source itself promised. |
+| **Activity** | What happened, with the evidence, and is the log intact? |
+| **Context** | What did MORPH think I asked for, and what carried across the last transformation? |
 
 ---
 
@@ -167,8 +210,8 @@ docs/             architecture, connectors, security, demo
 ## Tests
 
 ```bash
-pytest                      # 141 tests: unit, integration against the real services, security
-scripts/e2e.sh              # 24 browser checks, Chromium, the real bundle and the real API
+pytest                      # 161 tests: unit, integration against the real services, security
+scripts/e2e.sh              # 39 browser checks, Chromium, the real bundle and the real API
 node scripts/build_dashboard.mjs --check   # the committed bundle matches its sources
 hermes plugins validate .   # the catalog admission checks
 ```
@@ -176,9 +219,11 @@ hermes plugins validate .   # the catalog admission checks
 The integration tests start the three demo applications as real subprocesses on their own
 ports and assert against their HTTP APIs, including: an approved action landing in the
 source system, optimistic concurrency voiding a stale proposal, one application going
-down without taking the workspace with it, and change detection naming the record that
-moved. The security tests cover the network policy, the authority boundary, hostile
-schema text, and the refusal of anything the capability graph does not contain.
+down without taking the workspace with it, an edit made **outside** MORPH being detected
+and attributed, and change detection naming the record that moved. The security tests
+cover the network policy, read-only connectors, retry and rate-limit behaviour, the
+authority boundary, hostile schema text, and the refusal of anything the capability graph
+does not contain.
 
 ---
 
@@ -197,7 +242,9 @@ The long version is `docs/SECURITY.md`. The short version:
   matched.
 - **Egress is narrow.** HTTPS only (loopback needs an explicit opt-in), an optional host
   allowlist, no redirects, response caps, and connect-time validation of the address
-  actually dialled.
+  actually dialled. A connector can be marked `read_only`, which no role overrides.
+- **Retries are safe ones.** Reads retry with backoff; a write retries only because it
+  always carries an idempotency key. `429` waits for `Retry-After`.
 - **Credentials are Hermes's.** A connector names an environment variable; the value is
   read through `agent.secret_scope` and never logged, stored or returned.
 - **Nothing is atomic across applications**, and MORPH never claims otherwise: a batch

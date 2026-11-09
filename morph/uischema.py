@@ -20,8 +20,8 @@ from morph.errors import SchemaError
 from morph.util import clean_text, is_ref
 
 SCHEMA_VERSION = "morph.ui.v1"
-BLOCK_KINDS = ("metric", "table", "chart", "chart_series", "detail", "relation", "form",
-               "actions", "workflow")
+BLOCK_KINDS = ("metric", "table", "chart", "chart_series", "board", "timeline", "detail",
+               "relation", "form", "actions", "workflow")
 CHART_TYPES = ("bar", "line", "donut")
 SPANS = ("sm", "md", "lg", "full")
 TREND_HINTS = ("higher_is_better", "lower_is_better", "neutral")
@@ -34,7 +34,11 @@ MAX_IN_VALUES = 20
 MAX_TABLE_LIMIT = 100
 MAX_CHART_GROUPS = 12
 MAX_STEPS = 6
+MAX_BOARD_COLUMNS = 8
+MAX_CARD_FIELDS = 4
+MAX_TIMELINE_ITEMS = 40
 GROUPABLE_TYPES = ("enum", "bool", "string", "id", "int", "email")
+BOARDABLE_TYPES = ("enum", "bool")
 
 
 @dataclass
@@ -66,12 +70,18 @@ class Block:
     submit_label: str = ""
     fields: tuple[str, ...] = ()
     steps: tuple[dict[str, str], ...] = ()
+    time_field: str = ""
+    label_field: str = ""
+    status_field: str = ""
+    searchable: bool = False
+    sortable: bool = False
 
     def public(self) -> dict[str, Any]:
         out: dict[str, Any] = {"id": self.id, "kind": self.kind, "title": self.title,
                                "span": self.span}
         for key in ("entity", "description", "aggregate", "field", "unit", "chart_type",
-                    "group_by", "link", "operation", "submit_label"):
+                    "group_by", "link", "operation", "submit_label", "time_field",
+                    "label_field", "status_field"):
             value = getattr(self, key)
             if value:
                 out[key] = value
@@ -86,6 +96,10 @@ class Block:
             out["limit"] = self.limit
         if self.selectable:
             out["selectable"] = True
+        if self.searchable:
+            out["searchable"] = True
+        if self.sortable:
+            out["sortable"] = True
         if self.emphasis:
             out["emphasis"] = True
         if self.kind == "metric":
@@ -418,6 +432,10 @@ def _validate_block(raw: Any, graph: CapabilityGraph, errors: _Errors, where: st
             return None
         block.limit = max(1, min(int(raw.get("limit") or 25), MAX_TABLE_LIMIT))
         block.selectable = bool(raw.get("selectable", True))
+        # Search and sort are client-side over the rows the block already resolved.
+        # They are on by default because a queue you cannot sort is not a queue.
+        block.searchable = bool(raw.get("searchable", True))
+        block.sortable = bool(raw.get("sortable", True))
         block.row_actions = _operations(raw.get("row_actions"), entity, errors, where, "row_actions")
         sort_raw = raw.get("sort")
         if isinstance(sort_raw, dict):
@@ -458,6 +476,59 @@ def _validate_block(raw: Any, graph: CapabilityGraph, errors: _Errors, where: st
         block.span = span if span in SPANS else "lg"
         return block
 
+    if kind == "board":
+        group_by = str(raw.get("group_by") or "")
+        descriptor = entity.field(group_by)
+        if descriptor is None:
+            errors.add(where, f"group_by {group_by!r} is not a field of {entity.name!r}")
+            return None
+        if descriptor.type not in BOARDABLE_TYPES:
+            errors.add(where, f"a board groups an enum or bool field; {group_by!r} is "
+                              f"{descriptor.type}")
+            return None
+        if descriptor.type == "enum" and len(descriptor.values) > MAX_BOARD_COLUMNS:
+            errors.add(where, f"{group_by!r} has {len(descriptor.values)} values; a board takes at "
+                              f"most {MAX_BOARD_COLUMNS}")
+            return None
+        block.group_by = group_by
+        block.columns = _columns(raw.get("columns"), entity, errors, where, cap=MAX_CARD_FIELDS)
+        if not block.columns:
+            return None
+        block.limit = max(1, min(int(raw.get("limit") or 40), MAX_TABLE_LIMIT))
+        block.selectable = bool(raw.get("selectable", True))
+        block.row_actions = _operations(raw.get("row_actions"), entity, errors, where, "row_actions")
+        block.span = "full"
+        return block
+
+    if kind == "timeline":
+        name = str(raw.get("time_field") or "")
+        descriptor = entity.field(name)
+        if descriptor is None:
+            errors.add(where, f"time_field {name!r} is not a field of {entity.name!r}")
+            return None
+        if descriptor.type != "datetime":
+            errors.add(where, f"a timeline needs a datetime field; {name!r} is {descriptor.type}")
+            return None
+        block.time_field = name
+        label = str(raw.get("label_field") or entity.title_field)
+        if entity.field(label) is None:
+            label = entity.title_field
+        block.label_field = label
+        status = str(raw.get("status_field") or "")
+        if status and entity.field(status) is None:
+            errors.add(where, f"status_field {status!r} is not a field of {entity.name!r}")
+            return None
+        if not status:
+            candidate = next((f.name for f in entity.fields
+                              if f.role == "status" or f.type == "enum"), "")
+            status = candidate
+        block.status_field = status
+        block.limit = max(1, min(int(raw.get("limit") or 20), MAX_TIMELINE_ITEMS))
+        block.selectable = bool(raw.get("selectable", True))
+        block.row_actions = _operations(raw.get("row_actions"), entity, errors, where, "row_actions")
+        block.span = span if span in SPANS else "lg"
+        return block
+
     if kind == "detail":
         block.fields = _columns(raw.get("fields"), entity, errors, where, key="fields", cap=12)
         if not block.fields:
@@ -486,6 +557,7 @@ def _validate_block(raw: Any, graph: CapabilityGraph, errors: _Errors, where: st
         if not block.columns or not block.related_columns:
             return None
         block.limit = max(1, min(int(raw.get("limit") or 20), MAX_TABLE_LIMIT))
+        block.searchable = bool(raw.get("searchable", True))
         block.row_actions = _operations(raw.get("row_actions"), entity, errors, where, "row_actions")
         block.span = "full"
         return block
@@ -615,6 +687,11 @@ def planner_json_schema() -> dict[str, Any]:
                                                                           "enum": ["asc", "desc"]}}},
                                     "limit": {"type": "integer", "minimum": 1, "maximum": MAX_TABLE_LIMIT},
                                     "selectable": {"type": "boolean"},
+                                    "searchable": {"type": "boolean"},
+                                    "sortable": {"type": "boolean"},
+                                    "time_field": {"type": "string", "maxLength": 60},
+                                    "label_field": {"type": "string", "maxLength": 60},
+                                    "status_field": {"type": "string", "maxLength": 60},
                                     "row_actions": {"type": "array", "maxItems": 8,
                                                     "items": {"type": "string", "maxLength": 60}},
                                     "operations": {"type": "array", "maxItems": 8,

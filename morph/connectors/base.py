@@ -377,6 +377,16 @@ class Connector(abc.ABC):
     def get(self, entity: str, record_id: str) -> Optional[dict[str, Any]]:
         """Authoritative single-record read, used for pre-checks and verification."""
 
+    # — change feed —
+    def changes(self, since: int = 0) -> dict[str, Any]:
+        """What this application changed since a cursor.
+
+        Optional: a source that cannot offer one returns ``supported: False`` and
+        MORPH falls back to comparing read signatures, which is correct but reads
+        everything. The default says "not supported" rather than guessing.
+        """
+        return {"supported": False, "cursor": since, "changes": []}
+
     # — writes —
     @abc.abstractmethod
     def apply(self, entity: str, record_id: str, operation: str, params: dict[str, Any], *,

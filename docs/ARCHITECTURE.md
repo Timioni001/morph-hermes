@@ -1,15 +1,16 @@
 # Architecture
 
-MORPH is one pipeline with seven stages. Each stage has a single module, a single
+MORPH is one pipeline with eight stages. Each stage has a single module, a single
 responsibility, and a narrow interface to the next — which is what lets a new
 application be a new adapter rather than a change to the engine.
 
 ```
-goal ─▶ discovery ─▶ capability graph ─▶ planning ─▶ schema validation
-                                                          │
-                       authorised execution ◀─ resolution ┘
-                                 │
-                                 └─▶ read-back verification
+goal ─▶ interpretation ─▶ discovery ─▶ capability graph ─▶ planning ─▶ validation
+                                                                          │
+                            authorised execution ◀─ resolution ◀──────────┘
+                                      │                  ▲
+                                      │                  └── change feed (cursor sync)
+                                      └─▶ read-back verification
 ```
 
 Everything — the Hermes tools, the dashboard API, the CLI, the demo — goes through
@@ -17,6 +18,31 @@ Everything — the Hermes tools, the dashboard API, the CLI, the demo — goes t
 one place.
 
 ---
+
+## 0. Interpretation (`morph/intent.py`)
+
+Before anything is planned, the goal is *read*. The output is an :class:`Intent`:
+
+* a **mode** — `review`, `analyse`, `monitor`, `act` or `explore` — which decides the
+  shape of the workspace. A review goal gets a board and a sortable queue; an analysis
+  goal gets charts; a monitoring goal gets a timeline; an action goal leads with the
+  form and the record it targets.
+* a ranked **focus**: which entities the goal is about, whether the operator named them,
+  and the filters their words imply (`"delayed orders"` → `status = delayed`).
+* **what it could not cover.** This is the half that earns the stage. If the goal asks
+  for a refund and no connected entity exposes one, MORPH says so. If it exposes one but
+  the caller's role is denied it, MORPH says *that* instead — a different answer, and the
+  useful one.
+
+Two rules keep it honest. A word that named an *operation* does not also become a filter
+("flag the delayed orders" must not filter to orders already flagged — those are exactly
+the ones that do not need flagging). And a small, declared synonym table bridges the
+operator's vocabulary to the schema's ("complaint" → case, "stock" → inventory) at a
+fraction of a direct match's weight, so it can pull an entity into focus but never take
+the goal over. It applies to the goal only, so it can never invent a field.
+
+It is deterministic and inspectable — the Context view renders it — which is what makes
+it a sound floor for a stage the model also participates in.
 
 ## 1. Discovery (`morph/registry.py`, `morph/connectors/`)
 
@@ -123,6 +149,26 @@ because no application can join against another's database.
   `fetched_at` says when.
 - **Change detection is real.** Each entity read yields `{record_id: version}`; comparing
   two passes names the records that were added, removed or modified.
+
+## 5b. Change synchronisation (`morph/sync.py`)
+
+Resolution answers "what is true now?". Synchronisation answers "what moved?", and there
+are two mechanisms because they see different things:
+
+* **Cursor sync** asks each application's own `GET /v1/_changes?since=` feed. One small
+  request per application regardless of how many records exist, and it sees changes
+  MORPH never read — including an edit a person made directly in the source system,
+  attributed to them.
+* **Signature diffing** compares record ids and versions across two resolve passes. It
+  needs no cooperation from the source, but only sees the slice the workspace reads.
+
+Cursor sync is used where a source publishes a feed; signature diffing is the floor. The
+result says which answered, because "nothing changed" from a feed and "nothing changed in
+the slice we looked at" are different claims. A refresh also names the blocks that need
+redrawing, so a change to one entity does not rebuild the page.
+
+The first poll of a source is treated as history, not news: a fresh workspace must not
+announce every change ever made.
 
 ## 6. Authorised execution (`morph/actions.py`)
 

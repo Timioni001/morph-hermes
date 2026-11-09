@@ -81,11 +81,14 @@
   /* ── formatting ────────────────────────────────────────────────────────── */
 
   var TONE_GOOD = ["fulfilled", "delivered", "resolved", "paid", "done", "cleared", "ok",
-                   "positive", "shipped", "in_transit", "true", "yes", "applied", "verified"];
+                   "positive", "shipped", "in_transit", "true", "yes", "applied", "verified",
+                   "won", "active", "healthy"];
   var TONE_WARN = ["pending", "processing", "placed", "open", "new", "preparing", "contacted",
-                   "authorized", "normal", "medium", "neutral", "unverified", "applying"];
+                   "authorized", "normal", "medium", "neutral", "unverified", "applying",
+                   "qualified"];
   var TONE_BAD = ["delayed", "cancelled", "failed", "exception", "escalated", "urgent", "high",
-                  "flagged", "negative", "refunded", "stale", "expired", "rejected"];
+                  "flagged", "negative", "refunded", "stale", "expired", "rejected", "lost",
+                  "blocked", "overdue"];
 
   function tone(value) {
     var text = String(value === null || value === undefined ? "" : value).toLowerCase();
@@ -96,9 +99,9 @@
   }
 
   function titleCase(text) {
-    return String(text || "").replace(/_/g, " ").replace(/\b\w/g, function (c) {
-      return c.toUpperCase();
-    });
+    return String(text === null || text === undefined ? "" : text)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, function (c) { return c.toUpperCase(); });
   }
 
   function formatNumber(value, decimals) {
@@ -114,8 +117,7 @@
     var type = field && field.type;
     if (typeof value === "boolean") { return value ? "Yes" : "No"; }
     if (type === "money") {
-      var unit = field.unit ? field.unit + " " : "";
-      return unit + formatNumber(value, 2);
+      return (field.unit ? field.unit + " " : "") + formatNumber(value, 2);
     }
     if (type === "datetime") { return formatWhen(value); }
     if (typeof value === "number") {
@@ -128,12 +130,16 @@
   function formatWhen(value) {
     var date = new Date(value);
     if (isNaN(date.getTime())) { return String(value); }
-    if (SDK.utils && SDK.utils.isoTimeAgo) {
-      try { return SDK.utils.isoTimeAgo(value); } catch (err) { /* fall through */ }
-    }
     return date.toLocaleString(undefined, {
       year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
     });
+  }
+
+  function shortWhen(value) {
+    var date = new Date(value);
+    if (isNaN(date.getTime())) { return String(value || ""); }
+    return date.toLocaleString(undefined, { month: "short", day: "numeric",
+                                            hour: "2-digit", minute: "2-digit" });
   }
 
   function timeAgo(epochSeconds) {
@@ -143,6 +149,13 @@
     if (seconds < 3600) { return Math.round(seconds / 60) + "m ago"; }
     if (seconds < 86400) { return Math.round(seconds / 3600) + "h ago"; }
     return Math.round(seconds / 86400) + "d ago";
+  }
+
+  function show(value) {
+    if (value === null || value === undefined || value === "") { return "—"; }
+    if (typeof value === "boolean") { return value ? "Yes" : "No"; }
+    var text = String(value);
+    return text.length > 90 ? text.slice(0, 89) + "…" : text;
   }
 
   function cx() {
@@ -173,8 +186,13 @@
     search: "M10.5 17a6.5 6.5 0 100-13 6.5 6.5 0 000 13zM15.5 15.5L20 20",
     pin: "M12 3v8M12 11l4 4H8l4-4zM12 15v6",
     play: "M7 4l12 8-12 8z",
-    database: "M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6",
-    flow: "M5 4h5v5H5zM14 15h5v5h-5zM7.5 9v4.5a1.5 1.5 0 001.5 1.5h5"
+    plug: "M9 3v6M15 3v6M7 9h10v3a5 5 0 01-10 0zM12 17v4",
+    board: "M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v13h-4z",
+    pulse: "M3 12h4l2.5-7 4 14L16.5 12H21",
+    compass: "M12 3a9 9 0 100 18 9 9 0 000-18zM15.5 8.5l-2 5-5 2 2-5z",
+    sliders: "M4 7h10M18 7h2M4 17h4M12 17h8M15 4v6M8 14v6",
+    flow: "M5 4h5v5H5zM14 15h5v5h-5zM7.5 9v4.5a1.5 1.5 0 001.5 1.5h5",
+    arrow: "M5 12h13M13 6l6 6-6 6"
   };
 
   function Icon(props) {
@@ -203,9 +221,12 @@
   }
 
   function Notice(props) {
-    return h("div", { className: cx("mo-notice", props.tone), role: props.tone === "bad" ? "alert" : null },
+    return h("div", {
+      className: cx("mo-notice", props.tone),
+      role: props.tone === "bad" ? "alert" : null
+    },
       h(Icon, { name: props.icon || "alert", size: 16 }),
-      h("div", null,
+      h("div", { style: { minWidth: 0 } },
         props.title ? h("div", { className: "mo-notice-title" }, props.title) : null,
         props.children));
   }
@@ -224,4 +245,13 @@
     }, rest),
       props.busy ? h(Spinner) : (props.icon ? h(Icon, { name: props.icon, size: 15 }) : null),
       props.children);
+  }
+
+  function Panel(props) {
+    return h("section", { className: "mo-panel" },
+      h("div", { className: "mo-panel-head" },
+        h("h2", { className: "mo-panel-title" }, props.title),
+        props.aside || null),
+      props.flush ? props.children
+                  : h("div", { className: "mo-panel-body" }, props.children));
   }
