@@ -1368,13 +1368,39 @@
 
   /* ── workspace ──────────────────────────────────────────────────────────── */
 
-  var SUGGESTIONS = [
+  var SANDBOX_SUGGESTIONS = [
     "Work through delayed orders and the complaints about them",
     "Show stock running low and the restocks I should request",
     "Escalated support cases and the orders behind them",
     "Compare order value by status",
     "Monitor shipments running late"
   ];
+  var GITHUB_SUGGESTIONS = [
+    "Triage the open issues",
+    "Open issues by assignee",
+    "Compare issues by state",
+    "Closed issues and why they were closed"
+  ];
+
+  /* Suggestions are about what is connected, never about a service that is not. */
+  function suggestionsFor(graph) {
+    var sources = (graph && graph.sources) || [];
+    var out = [];
+    if (sources.some(function (source) { return source.id === "storefront"; })) {
+      out = out.concat(SANDBOX_SUGGESTIONS);
+    }
+    if (sources.some(function (source) { return source.kind === "github"; })) {
+      out = out.concat(GITHUB_SUGGESTIONS);
+    }
+    if (!out.length) {
+      sources.forEach(function (source) {
+        (source.entities || []).slice(0, 2).forEach(function (entity) {
+          out.push("Review " + (entity.label || entity.name).toLowerCase());
+        });
+      });
+    }
+    return out.slice(0, 5);
+  }
 
   function WorkspaceView(props) {
     var state = props.state;
@@ -1384,6 +1410,18 @@
     var health = (state && state.health) || [];
     var reachable = health.filter(function (probe) { return probe.ok; }).length;
     var pending = (state && state.proposals) || [];
+    var suggestions = suggestionsFor(state && state.graph);
+    var unavailable = (state && state.graph && state.graph.unavailable) || [];
+
+    if (state && !health.length && !unavailable.length) {
+      return h(Empty, {
+        icon: "link", title: "Nothing is connected yet",
+        text: "Connect a repository with `hermes morph connect github owner/name`, any "
+          + "service that publishes an OpenAPI document with `hermes morph connect openapi "
+          + "<base-url>`, or the offline practice services with `hermes morph connect "
+          + "sandbox`. Then press Refresh."
+      });
+    }
 
     return h("div", null, [
       h("div", { className: "mo-goal", key: "goal" }, [
@@ -1394,7 +1432,7 @@
         h("div", { className: "mo-goal-row", key: "r" }, [
           h("input", {
             key: "i", id: "mo-goal-input", className: "mo-goal-input", value: props.goal,
-            placeholder: "e.g. work through delayed orders and the complaints about them",
+            placeholder: suggestions.length ? "e.g. " + suggestions[0].toLowerCase() : "what do you need to see?",
             maxLength: 400, autoComplete: "off", ref: props.goalRef,
             onChange: function (event) { props.onGoalChange(event.target.value); },
             onKeyDown: function (event) { if (event.key === "Enter") { props.onCompose(); } }
@@ -1405,7 +1443,7 @@
             onClick: function () { props.onCompose(); }
           }, workspace ? "Transform workspace" : "Compose workspace")
         ]),
-        h("div", { className: "mo-suggestions", key: "s" }, SUGGESTIONS.map(function (text) {
+        h("div", { className: "mo-suggestions", key: "s" }, suggestions.map(function (text) {
           return h("button", {
             type: "button", className: "mo-chip", key: text,
             onClick: function () { props.onCompose(text); }
@@ -1416,9 +1454,9 @@
 
       !reachable
         ? h(Notice, { key: "down", tone: "bad", title: "No connected application is answering" },
-          "MORPH composes from live application schemas, so it has nothing to build from. "
-          + "Start the bundled demo services with `python -m apps.serve`, or point MORPH at "
-          + "your own services (docs/CONNECTORS.md).")
+          "MORPH composes from live schemas, so it has nothing to build from. "
+          + "`hermes morph doctor` says what is wrong with each connection; if these are the "
+          + "practice services, start them with `hermes morph up`.")
         : null,
 
       (workspace && (workspace.intent || {}).missing || []).length

@@ -108,7 +108,7 @@ def test_no_binary_or_bytecode_is_committed():
 
 def test_the_environment_template_documents_every_token_the_default_config_needs():
     template = (ROOT / ".env.example").read_text(encoding="utf-8")
-    default = json.loads((ROOT / "config" / "connectors.default.json").read_text(encoding="utf-8"))
+    default = json.loads((ROOT / "config" / "connectors.sandbox.json").read_text(encoding="utf-8"))
     for connector in default["connectors"]:
         if connector.get("token_env"):
             assert connector["token_env"] in template, connector["token_env"]

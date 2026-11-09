@@ -1,12 +1,12 @@
-"""GitHub connector — a real third-party API behind the same adapter contract.
+"""GitHub connector — one repository's issues and pull requests.
 
-The bundled demo applications exist so the whole system is reproducible with no
-account and no key. This adapter exists to prove the contract is not shaped around
-them: GitHub publishes no ``morph.source.v1`` schema, has no idempotency header, no
-version field and no change feed in the shape MORPH asks for, and it still slots in
-as one more application in the capability graph.
+This is the connection most people make first: ``hermes morph connect github
+owner/name``. With no token it reads a public repository anonymously and offers
+no writes; with one, the agent can propose triage — close, reopen, relabel,
+retitle, assign — and a person approves each change before it reaches GitHub.
 
-What that costs, honestly:
+GitHub has no idempotency header, no version field and no change feed in the
+shape MORPH asks of a source. What that costs, honestly:
 
 * **Versions** are derived from ``updated_at``. GitHub has no monotonic version, so
   optimistic concurrency here means "the issue has not been touched since the
@@ -17,10 +17,12 @@ What that costs, honestly:
 * **Change detection** uses the issues list with ``since``, which is GitHub's own
   incremental read. It catches an issue someone closed in the GitHub UI.
 
-Only operations with a **deterministic, verifiable effect** are offered. Posting a
-comment would be useful and is deliberately absent: its effect is an increment, so
-MORPH could not re-read the issue and prove the change it promised. An action MORPH
-cannot verify is an action MORPH should not offer.
+Only operations with a **deterministic, verifiable effect** are offered. Labels
+are therefore *set* as a whole list rather than added one at a time: the approver
+sees the exact list before and after, and the read-back either matches it or does
+not. Posting a comment would be useful and is deliberately absent: its effect is an
+increment, so MORPH could not re-read the issue and prove the change it promised.
+An action MORPH cannot verify is an action MORPH should not offer.
 """
 from __future__ import annotations
 
@@ -60,6 +62,20 @@ def _epoch(value: Any) -> int:
         return 0
 
 
+def _split_labels(value: Any) -> list[str]:
+    """A label list as people write it — "bug, help wanted" — as distinct names."""
+    seen: dict[str, str] = {}
+    for part in str(value or "").split(","):
+        name = clean_text(part, 50)
+        if name:
+            seen.setdefault(name.lower(), name)
+    return sorted(seen.values(), key=str.lower)
+
+
+def _join_labels(names: Sequence[str]) -> str:
+    return ", ".join(sorted((str(n) for n in names), key=str.lower))[:400]
+
+
 def _issue_record(raw: dict[str, Any]) -> dict[str, Any]:
     """One GitHub issue, flattened to the typed shape MORPH works in."""
     user = raw.get("user") or {}
@@ -71,9 +87,11 @@ def _issue_record(raw: dict[str, Any]) -> dict[str, Any]:
         "number": str(raw.get("number") or ""),
         "title": clean_text(raw.get("title"), 160),
         "state": "closed" if raw.get("state") == "closed" else "open",
+        "state_reason": clean_text(raw.get("state_reason"), 24),
+        "body": clean_text(raw.get("body"), 400),
         "author": clean_text(user.get("login"), 60),
         "assignee": clean_text(assignee.get("login"), 60),
-        "labels": ", ".join(sorted(labels))[:160],
+        "labels": _join_labels(labels),
         "label_count": len(labels),
         "comments": int(raw.get("comments") or 0),
         "milestone": clean_text(milestone.get("title"), 60),
@@ -102,9 +120,11 @@ def _descriptor(repo: str, login: str) -> dict[str, Any]:
                 {"name": "title", "type": "string", "label": "Title", "role": "title"},
                 {"name": "state", "type": "enum", "label": "State", "role": "status",
                  "values": ["open", "closed"], "writable": True},
+                {"name": "state_reason", "type": "string", "label": "Closed as"},
+                {"name": "body", "type": "string", "label": "Description"},
                 {"name": "author", "type": "string", "label": "Opened by"},
                 {"name": "assignee", "type": "string", "label": "Assignee", "writable": True},
-                {"name": "labels", "type": "string", "label": "Labels"},
+                {"name": "labels", "type": "string", "label": "Labels", "writable": True},
                 {"name": "label_count", "type": "int", "label": "Labels", "role": "metric"},
                 {"name": "comments", "type": "int", "label": "Comments", "role": "metric"},
                 {"name": "milestone", "type": "string", "label": "Milestone"},
@@ -121,6 +141,28 @@ def _descriptor(repo: str, login: str) -> dict[str, Any]:
                  "effect": {"state": "closed"},
                  "precondition": [{"field": "state", "op": "neq", "value": "closed",
                                    "message": "the issue is already closed"}]},
+                {"id": "close_as_not_planned", "label": "Close as not planned",
+                 "risk": "medium",
+                 "description": "Close this issue on GitHub, marked 'not planned'.",
+                 "effect": {"state": "closed", "state_reason": "not_planned"},
+                 "precondition": [{"field": "state", "op": "neq", "value": "closed",
+                                   "message": "the issue is already closed"}]},
+                {"id": "set_labels", "label": "Set labels", "risk": "low",
+                 "description": ("Replace this issue's labels with exactly the list given, "
+                                 "comma-separated. Include the labels it should keep."),
+                 "params": [{"name": "labels", "type": "string", "label": "Labels",
+                             "required": False, "max_length": 400}],
+                 "effect": {"labels": "{labels}"}},
+                {"id": "set_title", "label": "Retitle", "risk": "low",
+                 "description": "Replace this issue's title.",
+                 "params": [{"name": "title", "type": "string", "label": "Title",
+                             "required": True, "max_length": 160}],
+                 "effect": {"title": "{title}"}},
+                {"id": "unassign", "label": "Remove assignee", "risk": "low",
+                 "description": "Remove every assignee from this issue.",
+                 "effect": {"assignee": ""},
+                 "precondition": [{"field": "assignee", "op": "neq", "value": "",
+                                   "message": "nobody is assigned"}]},
                 {"id": "reopen_issue", "label": "Reopen issue", "risk": "low",
                  "description": "Reopen a closed issue on GitHub.",
                  "effect": {"state": "open"},
@@ -192,9 +234,9 @@ class GitHubConnector(Connector):
             return {}
         token = get_secret(self.config.token_env)
         if not token:
-            raise ConnectorError(
-                f"{self.id!r} needs a credential: set {self.config.token_env} in the Hermes "
-                f"profile environment (a GitHub token with 'repo' scope)")
+            # Public repositories read fine without one. Writes are not offered
+            # until `describe` has seen an authenticated login.
+            return {}
         return {"Authorization": f"Bearer {token}"}
 
     def _request(self, method: str, path: str, *, params: Any = None,
@@ -283,12 +325,18 @@ class GitHubConnector(Connector):
             raise ConnectorError(f"{self.id!r}: GitHub returned HTTP {status} for {self.repo}")
 
         login = ""
-        if self.config.token_env:
+        if self._headers():
             who_status, who, _ = self._request("GET", "/user")
             if who_status == 200 and isinstance(who, dict):
                 login = clean_text(who.get("login"), 60)
 
-        described = SourceDescriptor.parse(_descriptor(self.repo, login),
+        shape = _descriptor(self.repo, login)
+        if not login or self.config.read_only:
+            # Nothing can be written, so nothing is offered: an operation the
+            # agent could propose and nobody could apply is noise in an approval
+            # queue.
+            shape["entities"][0]["operations"] = []
+        described = SourceDescriptor.parse(shape,
                                            connector_id=self.id, kind=self.kind,
                                            fetched_at=time.time())
         with self._lock:
@@ -307,6 +355,10 @@ class GitHubConnector(Connector):
         return {"id": self.id, "kind": self.kind, "ok": True, "label": described.label,
                 "entities": [e.name for e in described.entities],
                 "repo": self.repo, "acting_as": self._login or "anonymous (read-only)",
+                "writable": bool(self._login) and not self.config.read_only,
+                "hint": "" if self._login else (
+                    f"set {self.config.token_env or 'a token_env'} in the Hermes profile "
+                    f"to let changes be proposed"),
                 "latency_ms": round((time.time() - started) * 1000, 1)}
 
     # ─────────────────────────────── reads ────────────────────────────────
@@ -438,9 +490,28 @@ class GitHubConnector(Connector):
                                                   "changed": dict(changed)}
         return ApplyResult(record=record, changed=changed, replayed=False)
 
+    def normalise_params(self, entity: str, operation: str,
+                         params: dict[str, Any]) -> dict[str, Any]:
+        if operation == "set_labels":
+            return {**params, "labels": _join_labels(_split_labels(params.get("labels")))}
+        if operation == "set_title":
+            return {**params, "title": clean_text(params.get("title"), 160)}
+        return params
+
     def _body_for(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
         if operation == "close_issue":
-            return {"state": "closed"}
+            return {"state": "closed", "state_reason": "completed"}
+        if operation == "close_as_not_planned":
+            return {"state": "closed", "state_reason": "not_planned"}
+        if operation == "set_labels":
+            return {"labels": _split_labels(params.get("labels"))}
+        if operation == "set_title":
+            title = clean_text(params.get("title"), 160)
+            if not title:
+                raise ConnectorError("an issue cannot have an empty title")
+            return {"title": title}
+        if operation == "unassign":
+            return {"assignees": []}
         if operation == "reopen_issue":
             return {"state": "open"}
         if operation == "assign_to_me":

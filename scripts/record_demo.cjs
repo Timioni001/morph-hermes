@@ -161,7 +161,7 @@ async function main() {
   await page.mouse.wheel(0, 500);
   await wait(2400);
 
-  say("MORPH. Software that adapts to you.");
+  say("MORPH. The agent proposes, you approve, the change is verified.");
   await wait(2400);
 
   closeCaption();

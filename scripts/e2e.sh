@@ -11,6 +11,7 @@ PYTHON="${PYTHON:-python3}"
 WORK="$(mktemp -d /tmp/morph-e2e.XXXXXX)"
 export MORPH_DEMO_DATA_DIR="$WORK/apps"
 export MORPH_DATA_DIR="$WORK/morph"
+export MORPH_CONFIG_FILE="$PWD/config/connectors.sandbox.json"
 mkdir -p "$MORPH_DEMO_DATA_DIR" "$MORPH_DATA_DIR"
 
 cleanup() {

@@ -203,18 +203,21 @@ and it is the honest version of what that costs:
 | An integer `_version` | `updated_at` | Derives the version from the timestamp. Optimistic concurrency then means "untouched since the proposal was built" — the guarantee that matters, reached another way. |
 | An `Idempotency-Key` header | nothing | Enforces the key on MORPH's side, and offers only set-to-value operations, so a repeat is harmless even if the cache is lost. |
 | `GET /v1/_changes?since=` | `GET /issues?since=` | Uses GitHub's own incremental read, which catches an issue closed in the GitHub UI. |
-| Declared operations | a REST API | Publishes three: `close_issue`, `reopen_issue`, `assign_to_me`. |
+| Declared operations | a REST API | Publishes seven, each a set-to-value: close, close as not planned, reopen, set labels, set title, assign to me, unassign. Without a token it publishes none and the connection is read-only. |
 
-The missing fourth operation is the interesting one. Posting a comment would be useful,
+The missing operation is the interesting one. Posting a comment would be useful,
 and it is deliberately absent: its effect is an increment, so MORPH could not re-read the
 issue and prove the change it promised. **An action MORPH cannot verify is an action
 MORPH should not offer** — and that rule is worth more than the feature.
 
-Try it against your own repository, read-only:
+Labels show the same rule from the other side. "Add a label" is an increment too, so
+the operation is `set_labels`: the whole list, canonicalised before the promise is made
+so the read-back can be compared exactly.
+
+Connect your own repository:
 
 ```bash
-export MORPH_GITHUB_TOKEN="$(gh auth token)"
-python scripts/check_github_connector.py --repo owner/name --propose
+hermes morph connect github owner/name
 ```
 
 ## Option 2 — write an adapter
@@ -253,7 +256,8 @@ What an adapter owes the engine:
 
 Precedence, highest first: `MORPH_CONFIG` (inline JSON) → `MORPH_CONFIG_FILE` → the
 Hermes plugin config key `plugins.entries.morph.config` → `<plugin data
-dir>/config.json` → the bundled `config/connectors.default.json`.
+dir>/config.json`, which is the file `hermes morph connect` writes. With none of them
+MORPH is connected to nothing. `config/connectors.sandbox.json` is a complete example.
 
 ```jsonc
 {

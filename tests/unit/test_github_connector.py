@@ -58,8 +58,15 @@ class FakeGitHub:
             if method == "PATCH":
                 if "state" in (json or {}):
                     issue["state"] = json["state"]
+                if "state_reason" in (json or {}):
+                    issue["state_reason"] = json["state_reason"]
+                if "labels" in (json or {}):
+                    issue["labels"] = [{"name": name} for name in json["labels"]]
+                if "title" in (json or {}):
+                    issue["title"] = json["title"]
                 if "assignees" in (json or {}):
-                    issue["assignee"] = {"login": json["assignees"][0]}
+                    issue["assignee"] = ({"login": json["assignees"][0]}
+                                         if json["assignees"] else None)
                 issue["updated_at"] = "2026-11-09T12:00:00Z"
                 return FakeResponse(200, issue)
             return FakeResponse(200, issue)
@@ -107,16 +114,66 @@ def test_a_github_issue_becomes_a_typed_morph_record():
 def test_the_schema_only_offers_operations_whose_effect_can_be_verified(connector):
     described = connector.describe(refresh=True)
     entity = described.entity("issues")
-    assert {op.id for op in entity.operations} == {"close_issue", "reopen_issue", "assign_to_me"}
+    assert {op.id for op in entity.operations} == {
+        "close_issue", "close_as_not_planned", "reopen_issue", "assign_to_me", "unassign",
+        "set_labels", "set_title"}
     for operation in entity.operations:
-        # Every promised effect names a real field with a concrete value, so a
-        # read-back can prove it. An increment-shaped action (posting a comment)
-        # is deliberately absent.
+        # Every promised effect names a real field, set to a constant or to one of
+        # the operation's own parameters, so a read-back can prove it. An
+        # increment-shaped action (posting a comment) is deliberately absent.
         assert operation.effect
+        params = {p.name for p in operation.params}
         for field_name, value in operation.effect.items():
             assert entity.field(field_name) is not None
-            assert not (isinstance(value, str) and value.startswith("{"))
+            if isinstance(value, str) and value.startswith("{"):
+                assert value.strip("{}") in params
         assert operation.requires_approval is True
+
+
+def test_labels_are_set_as_a_whole_list_so_the_result_can_be_checked(connector):
+    """However the list is typed, the promise is the form GitHub reports back."""
+    params = connector.normalise_params("issues", "set_labels",
+                                        {"labels": " triage,bug , Bug,,help wanted "})
+    assert params == {"labels": "bug, help wanted, triage"}
+    operation = connector.describe().entity("issues").operation("set_labels")
+    assert operation.predict(params) == {"labels": "bug, help wanted, triage"}
+
+    result = connector.apply("issues", "1", "set_labels", params, expected_version=None,
+                             idempotency_key="k-labels", actor="dana")
+    assert result.changed == {"labels": "bug, help wanted, triage"}
+    assert connector._client.calls[-1][2] == {"labels": ["bug", "help wanted", "triage"]}
+
+
+def test_clearing_every_label_is_a_promise_too(connector):
+    params = connector.normalise_params("issues", "set_labels", {})
+    operation = connector.describe().entity("issues").operation("set_labels")
+    assert operation.predict(params) == {"labels": ""}
+    result = connector.apply("issues", "1", "set_labels", params, expected_version=None,
+                             idempotency_key="k-clear", actor="dana")
+    assert result.record["labels"] == "" and result.record["label_count"] == 0
+
+
+def test_closing_as_not_planned_says_so_on_github(connector):
+    result = connector.apply("issues", "1", "close_as_not_planned", {}, expected_version=None,
+                             idempotency_key="k-np", actor="dana")
+    assert result.changed == {"state": "closed", "state_reason": "not_planned"}
+
+
+def test_without_a_token_a_public_repository_is_read_and_nothing_is_offered(morph_home,
+                                                                              monkeypatch):
+    """No credential is not an error: it is a read-only connection that says so."""
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    built = GitHubConnector(ConnectorConfig(id="github", kind="github", label="GitHub",
+                                            token_env="GITHUB_TOKEN",
+                                            options={"repo": "acme/widgets"}))
+    built._client = FakeGitHub([issue(1)])
+    described = built.describe(refresh=True)
+    assert described.entity("issues").operations == ()
+    assert [r["number"] for r in built.fetch("issues").records] == ["1"]
+    health = built.health()
+    assert health["ok"] and health["writable"] is False
+    assert "GITHUB_TOKEN" in health["hint"]
+    assert not any(url.endswith("/user") for _m, url, _b in built._client.calls)
 
 
 def test_the_effect_of_assigning_is_the_authenticated_account(connector):
@@ -245,8 +302,10 @@ def test_github_is_just_another_connector_in_the_graph(morph_home, monkeypatch):
 
     graph = engine.graph(refresh=True)
     assert "github.issues" in graph.entities
-    assert [ref for ref, _ in graph.writable_operations] == [
-        "github.issues.close_issue", "github.issues.reopen_issue", "github.issues.assign_to_me"]
+    assert {ref for ref, _ in graph.writable_operations} == {
+        f"github.issues.{name}" for name in (
+            "close_issue", "close_as_not_planned", "reopen_issue", "assign_to_me",
+            "unassign", "set_labels", "set_title")}
 
     from morph.actions import Principal
     planned = engine.plan_workspace(Principal.operator("ops@example.com"),
@@ -255,3 +314,41 @@ def test_github_is_just_another_connector_in_the_graph(morph_home, monkeypatch):
     assert any(block["kind"] in ("board", "table")
                for section in planned["workspace"]["schema"]["sections"]
                for block in section["blocks"])
+
+
+def test_the_whole_loop_on_github_propose_approve_verify(morph_home, monkeypatch):
+    """What the product is: an agent proposes, a person approves, the issue is re-read."""
+    from morph import engine, registry
+    from morph.actions import Principal
+    from morph.config import settings
+    from morph.errors import MorphError
+
+    monkeypatch.setenv("MORPH_GITHUB_TOKEN", "test")
+    monkeypatch.setenv("MORPH_CONFIG", json.dumps({
+        "connectors": [{"id": "widgets", "kind": "github", "label": "acme/widgets",
+                        "token_env": "MORPH_GITHUB_TOKEN",
+                        "options": {"repo": "acme/widgets"}}],
+        "default_role": "operator"}))
+    settings.cache_clear()
+    registry.reset()
+    engine.invalidate()
+    fake = FakeGitHub([issue(1)])
+    registry.get("widgets")._client = fake
+    engine.graph(refresh=True)
+
+    agent = Principal.agent()
+    proposal = engine.propose(agent, source="widgets", entity="issues", record_id="1",
+                              operation="set_labels", params={"labels": "stale,  Bug"},
+                              reason="no reply since spring")
+    assert proposal["status"] == "pending" and "confirm_token" not in proposal
+    assert not [c for c in fake.calls if c[0] == "PATCH"], "proposing must not write"
+    with pytest.raises(MorphError):
+        engine.approve(agent, proposal["id"], confirm_token="guess")
+
+    operator = Principal.operator("dana@example.com")
+    token = next(p for p in engine.proposals(operator)
+                 if p["id"] == proposal["id"])["confirm_token"]
+    applied = engine.approve(operator, proposal["id"], confirm_token=token)
+    assert applied["status"] == "applied"
+    assert applied["result"]["verification"]["verified"] is True
+    assert fake.issues["1"]["labels"] == [{"name": "Bug"}, {"name": "stale"}]

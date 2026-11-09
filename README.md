@@ -1,13 +1,30 @@
 # MORPH
 
-**Software that adapts to you.**
+**Let your Hermes agent act on the APIs you use — without letting it act alone.**
 
-A native [Hermes Agent](https://hermes-agent.nousresearch.com) plugin that turns several
-independent applications into one workspace shaped around what you are trying to get
-done — and lets you act on them from it, with a human approving every write and the
-result verified in the application that owns the record.
+MORPH is a native [Hermes Agent](https://hermes-agent.nousresearch.com) plugin that puts
+an approval gate between the agent and any API it can write to. The agent can read
+everything and *propose* changes. You approve each one, seeing exactly what will change.
+MORPH applies it, then reads the record back from the API to prove it landed.
 
-<sub>Verified on Hermes Agent v0.23.0 · 225 unit/integration tests · 39 browser checks ·
+```bash
+hermes morph connect github your-name/your-repo
+```
+
+```
+you    › close the stale issues nobody has answered since spring, label them "stale"
+hermes › I've proposed 6 changes. Nothing is applied until you approve them.
+```
+
+Six cards appear under **Approvals**, each with the before and after. Approve them and
+each is written, re-read from GitHub and marked *verified* — or *unverified*, if what
+came back is not what was promised. The agent has no tool that approves, and is never
+given the token an approval needs.
+
+It is not GitHub-specific. Point it at any service that publishes an OpenAPI document
+and it derives what can be read and what can be safely changed from the schema alone.
+
+<sub>Verified on Hermes Agent v0.23.0 · 240 unit/integration tests · 39 browser checks ·
 <code>hermes plugins validate</code> clean · MIT</sub>
 
 ![MORPH inside the Hermes dashboard](docs/assets/morph-in-hermes.png)
@@ -16,11 +33,11 @@ result verified in the application that owns the record.
 
 ## Contents
 
-1. [What it is](#what-it-is)
-2. [Quick start](#quick-start) — five minutes, no account
-3. [Install into Hermes](#install-into-hermes)
+1. [Why](#why)
+2. [Quick start](#quick-start)
+3. [Try it offline](#try-it-offline) — no account, no token
 4. [Using it](#using-it) — dashboard, terminal, chat, agent tools
-5. [Connect your own applications](#connect-your-own-applications)
+5. [Connect anything else](#connect-anything-else)
 6. [How it works](#how-it-works)
 7. [Safety model](#safety-model)
 8. [What has been verified](#what-has-been-verified)
@@ -30,82 +47,37 @@ result verified in the application that owns the record.
 
 ---
 
-## What it is
+## Why
 
-Tell it *"work through delayed orders and the complaints about them"*. MORPH reads the
-schemas of the applications it is connected to, works out what that goal is actually
-about, composes an interface from them, fills it with data read live from each
-application, joins records across application boundaries, and offers only the actions
-your role is permitted to take. Change the goal and the workspace changes with it,
-carrying your selection and your filters over.
+Giving an agent a write-capable API token is all-or-nothing. Either it cannot change
+anything, or it can change everything the token can, and you find out afterwards — from
+a message in which the agent tells you it went fine.
 
-**There is no layout in this repository.** Every workspace is composed at request time
-from whatever the connected applications happen to publish.
+MORPH splits that in three:
 
-> If you are looking at this next to a generative-UI plugin: those draw the answer.
-> MORPH operates the systems. The demo is not a rendered chart — it is an order that is
-> actually flagged in the Storefront, with the Storefront's own changelog showing who
-> approved it.
+| | Who | What stops it going wrong |
+|---|---|---|
+| **Propose** | the agent | Only operations with a stated, checkable effect exist. Preconditions and your role are checked before a proposal is even queued. |
+| **Approve** | a person | Dashboard or an interactive terminal only. No agent tool approves; a hook blocks any `morph_` tool MORPH did not register. |
+| **Verify** | MORPH | The record is re-read from the API and compared field by field with what was promised. Anything else is reported as `unverified`, never as success. |
+
+Everything is written to a hash-chained log, so "who approved what, and did it really
+happen" has an answer later.
 
 ### Why a plugin, and not a prompt or a skill
 
-A prompt cannot hold a credential, mount a dashboard tab, keep a hash-chained log across
-sessions, or stop the agent approving its own write. MORPH needs all four, so it is a
-plugin that uses every surface Hermes offers: **7 tools**, **3 lifecycle hooks**, a
-**dashboard tab**, a **`/morph` slash command**, a **`hermes morph` CLI**, a **system
-prompt section**, and **3 bundled skills**.
+A prompt cannot hold a credential, mount a dashboard tab, keep a tamper-evident log
+across sessions, or stop the agent approving its own write. MORPH needs all four, so it
+uses every surface Hermes offers: **7 tools**, **3 lifecycle hooks**, a **dashboard
+tab**, a **`/morph` slash command**, a **`hermes morph` CLI**, a **system prompt
+section**, and **3 bundled skills**.
 
 ---
 
 ## Quick start
 
-No Hermes, no account, no API key. Three bundled applications start on loopback with
-their own databases, and the dashboard runs against them.
-
 ```bash
-git clone https://github.com/timioni001/morph-hermes && cd morph-hermes
-```
-
-```bash
-make install
-```
-
-```bash
-make demo
-```
-
-`make demo` is an acceptance test as much as a demonstration: it starts three
-applications, composes a workspace from a goal, has the agent propose an action, shows
-the agent **refused** when it tries to approve, has an operator approve it, then reads
-the change back out of the source application's own API. It exits non-zero if any of
-that does not hold.
-
-To look at it rather than read it:
-
-```bash
-make serve
-```
-
-| | |
-|---|---|
-| <http://localhost:8820> | the MORPH dashboard |
-| <http://localhost:8811> | the Storefront's own record page |
-| <http://localhost:8812> | the Helpdesk's |
-| <http://localhost:8813> | the Warehouse's |
-
-Flag an order in MORPH, approve it, then reload the Storefront page. Its status and
-version have changed there. That is the whole claim.
-
-> **Note** — `make serve` runs the dashboard through a local harness that implements the
-> Hermes dashboard contract, so you can see it without installing Hermes. For the real
-> thing, see below.
-
----
-
-## Install into Hermes
-
-```bash
-ln -s "$PWD" ~/.hermes/plugins/morph
+git clone https://github.com/timioni001/morph-hermes && ln -s "$PWD/morph-hermes" ~/.hermes/plugins/morph
 ```
 
 ```bash
@@ -113,18 +85,34 @@ hermes plugins validate ~/.hermes/plugins/morph && hermes plugins enable morph
 ```
 
 ```bash
-hermes morph up
+hermes morph connect github your-name/your-repo
 ```
 
-`up` starts the applications MORPH ships with, stores their tokens through Hermes's own
-credential route, and leaves everything else in your configuration alone. Then:
+`connect` checks the repository answers before saving anything; if it does not, nothing
+is changed. With no `GITHUB_TOKEN` in your Hermes environment a public repository is
+connected **read-only** — you can look, and MORPH offers no operations. Add a token with
+access to the repository's issues and the operations appear:
+
+| Operation | What it promises |
+|---|---|
+| `close_issue` / `close_as_not_planned` / `reopen_issue` | `state`, `state_reason` |
+| `set_labels` | the whole label list, exactly |
+| `set_title` | `title` |
+| `assign_to_me` / `unassign` | `assignee` |
+
+MORPH stores the *name* of the variable, never the token, and reads it through Hermes's
+own secret scope at call time.
+
+Then open the dashboard and pick **MORPH** under *Plugins*:
 
 ```bash
 hermes dashboard
 ```
 
-Open <http://localhost:9119> and pick **MORPH** under *Plugins*.
+Ask the agent for something in chat — *"triage the open issues: close the duplicates as
+not planned and assign the bugs to me"* — and approve what it proposes.
 
+### Turn the AI planning on
 ### Turn the AI planning on
 
 MORPH plans with whatever model Hermes is configured to use, and falls back to a
@@ -136,13 +124,42 @@ hermes setup --portal
 ```
 
 ```bash
-hermes morph goal "work through delayed orders and the complaints about them"
+hermes morph goal "open bugs nobody is assigned to"
 ```
 
 The workspace header changes from *"Planned deterministically, with no model involved"*
 to *"Planned by the host model"*. `model-repaired` means the model's first plan failed
 schema validation and the repair pass fixed it — that is the recovery path working, and
 it still counts.
+
+---
+
+## Try it offline
+
+No GitHub token, no Hermes, no network. MORPH ships a sandbox: three small services
+(a storefront, a helpdesk, a warehouse) with their own databases and HTTP APIs, so the
+whole propose → approve → verify loop — including joins *across* services — can be
+exercised on loopback.
+
+```bash
+make install
+```
+
+```bash
+make demo
+```
+
+`make demo` is an acceptance test: it starts the services, has the agent propose a
+change, shows the agent **refused** when it tries to approve, has an operator approve,
+then reads the change back out of the owning service's own API. It exits non-zero if any
+of that does not hold. `make serve` leaves it all running with the dashboard at
+<http://localhost:8820>.
+
+Inside Hermes the same sandbox is one command, and `up` starts it:
+
+```bash
+hermes morph connect sandbox && hermes morph up
+```
 
 ---
 
@@ -167,10 +184,14 @@ background and follows its theme.
 ### From the terminal
 
 ```bash
-hermes morph up                          # start the bundled applications, wire their tokens
-hermes morph status                      # applications, workspace, pending approvals
+hermes morph connect github owner/name   # connect a repository (probed before it is saved)
+hermes morph connect openapi <base-url>  # connect any service with an OpenAPI document
+hermes morph connect sandbox             # the offline practice services; then `hermes morph up`
+hermes morph connections                 # what is connected and what may be proposed there
+hermes morph disconnect <id>
+hermes morph status                      # connections, workspace, pending approvals
 hermes morph discover                    # the full capability graph and your permissions
-hermes morph goal "delayed orders and the complaints about them"
+hermes morph goal "open bugs nobody is assigned to"
 hermes morph state                       # the workspace with live values
 hermes morph proposals                   # what is waiting for a human
 hermes morph approve <proposal-id>       # interactive only: refuses without a terminal
@@ -211,31 +232,29 @@ depend on nobody ever adding one.
 
 ### Bundled skills
 
-`morph:operations-triage`, `morph:connect-an-application`, `morph:verified-change` — how
+`morph:triage`, `morph:connect-an-application`, `morph:verified-change` — how
 the agent learns MORPH's discipline (propose, wait, verify) without that discipline
 having to fit in a tool description.
 
 ---
 
-## Connect your own applications
+## Connect anything else
 
-MORPH is not written against any particular application. There are four adapters:
+MORPH is not written against any particular API. There are four adapters:
 
-| Kind | What the application must provide | Use it for |
+| Kind | What the service must provide | Use it for |
 |---|---|---|
+| **`github`** | — | a repository's issues and pull requests |
 | **`openapi`** | an OpenAPI 3 document | **anything** — nothing MORPH-specific at all |
-| **`http-rest`** | a `morph.source.v1` descriptor | an application you control, described exactly |
-| **`github`** | — | a hand-written adapter for one vendor's API |
+| **`http-rest`** | a `morph.source.v1` descriptor | a service you control, described exactly |
 | **`memory`** | — | an in-process fixture, for tests |
 
 ### `openapi` — the general case
 
 Point it at the document a service already publishes:
 
-```json
-{ "id": "fieldwork", "kind": "openapi", "label": "Fieldwork",
-  "base_url": "https://api.example.com", "token_env": "FIELDWORK_TOKEN",
-  "options": { "spec_path": "/openapi.json" } }
+```bash
+hermes morph connect openapi https://api.example.com --token-env FIELDWORK_TOKEN
 ```
 
 It looks for the shape almost every REST API already has — `GET /things`,
@@ -271,16 +290,16 @@ hand, and what the GitHub connector does when a vendor provides none of it.
 
 ### Configuration
 
-Copy a starting point and point `MORPH_CONFIG_FILE` at it, or drop it at
-`<plugin data dir>/config.json`:
+`connect` writes `<plugin data dir>/config.json`. You can edit that file by hand — to
+declare a join between two services, or per-role permissions — or replace it wholesale
+with `MORPH_CONFIG_FILE` or Hermes's own plugin config. An install with no configuration
+is connected to nothing.
 
-| File | For |
+| File | Shows |
 |---|---|
-| `config/connectors.default.json` | the three bundled applications |
-| `config/connectors.openapi.example.json` | any OpenAPI service |
 | `config/connectors.github.example.json` | a GitHub repository |
-
-Cross-application links and per-role permissions live in the same file.
+| `config/connectors.openapi.example.json` | any OpenAPI service |
+| `config/connectors.sandbox.json` | three services, the joins between them, and a role |
 
 ---
 
@@ -320,9 +339,10 @@ morph/
   actions.py      principals, roles, the approval boundary
   store.py        workspace revisions, proposals, hash-chained audit
   sync.py         cursors and change feeds
-  launch.py       hermes morph up
+  connect.py      hermes morph connect / disconnect / connections
+  launch.py       hermes morph up (starts the sandbox)
   connectors/     the adapter contract and the four adapters
-apps/             three independent demo applications
+apps/             the offline sandbox: three small independent services
 dashboard/        the plugin's tab: manifest, plugin_api.py, src/, dist/
 skills/           three workflow guides
 ```
@@ -349,10 +369,10 @@ skills/           three workflow guides
 
 - **Third-party network calls** — the applications you configure, and `api.github.com`
   when a GitHub connector is configured. Nothing else.
-- **Background processes** — `hermes morph up` starts the three bundled demonstration
-  applications on loopback. It starts nothing else, ever.
-- **Stored credentials** — `up` asks Hermes to store the demo applications' generated
-  tokens through the published `save_env_values` helper. Outside Hermes it stores nothing
+- **Background processes** — none unless you connect the sandbox; then `hermes morph up`
+  starts its three services on loopback. It starts nothing else, ever.
+- **Stored credentials** — MORPH's configuration holds variable *names* only. For the
+  sandbox, `up` asks Hermes to store the practice services' generated tokens through the published `save_env_values` helper. Outside Hermes it stores nothing
   and prints the variables for you to export.
 - **Reads outside its own data** — none. State lives in the plugin data directory.
 - **Telemetry** — none, of any kind.
@@ -368,7 +388,7 @@ suite that executes and a contract that was read.
 
 - Three applications, each with its own SQLite database, bearer token and HTTP API,
   started as independent processes.
-- **225 Python tests** — unit, integration against those running services, and security.
+- **240 Python tests** — unit, integration against those running services, and security.
 - **39 browser checks** in Chromium against the committed bundle and the live API,
   including two mobile viewports.
 - **`make demo`** end to end: discovery, composition, the agent proposing, the agent
@@ -396,9 +416,9 @@ suite that executes and a contract that was read.
   Hermes install used for verification has no model credential, so its runs report
   `deterministic`, which is the fallback behaving correctly. [Two commands close
   this](#turn-the-ai-planning-on); they need your own free Nous login.
-- **GitHub issue reads.** The connector authenticated and introspected against a real
-  repository, but it had no open issues, so listing, reading and change detection are
-  covered by 15 tests with a recorded transport.
+- **GitHub issue writes.** The connector authenticated and introspected against a real
+  repository, but closing, labelling, retitling and assigning are covered by tests with a
+  recorded transport rather than by changing a real repository.
 
 ---
 
@@ -437,7 +457,9 @@ dev extra is for the tests and the demo.
 | `port 8811 is already in use` | `pkill -f 'uvicorn apps\.'` |
 | `HTTP Error 401` from the demo | stale applications holding the ports; same `pkill`, then re-run |
 | Workspace says `deterministic` | no model configured — [see above](#turn-the-ai-planning-on) |
-| Connector says it needs a credential | `hermes morph up`, or export the variable the connector names |
+| `Nothing is connected` | `hermes morph connect github owner/name`, or `connect sandbox` |
+| GitHub connected but no operations offered | no `GITHUB_TOKEN` in the Hermes environment, or `--read-only` |
+| Connector says it needs a credential | export the variable the connector names; for the sandbox, `hermes morph up` |
 
 `docs/WSL.md` is a full runbook for Windows/WSL2, including reclaiming disk.
 
@@ -458,12 +480,12 @@ dev extra is for the tests and the demo.
 - Per-user roles come from the dashboard session identity Hermes provides; with the
   dashboard on loopback and no auth gate engaged, every local caller is the configured
   default operator. Map identities to roles under `user_roles` when running with auth.
-- The bundled applications are demonstration systems. They are real services with real
-  databases and real HTTP APIs, which is what makes the integration demonstrable — they
-  are not a storefront.
-- The GitHub connector offers only operations whose effect can be verified by re-reading
-  the issue. Posting a comment is deliberately absent: its effect is an increment, so
-  MORPH could not prove the change it promised.
+- The sandbox services exist to exercise MORPH offline. They are real processes with
+  real databases and HTTP APIs, and they are not a product.
+- The GitHub connector covers issues and pull requests as issues, and offers only
+  operations whose effect can be verified by re-reading the issue. Posting a comment is
+  deliberately absent: its effect is an increment, so MORPH could not prove the change
+  it promised. Labels are set as a whole list for the same reason.
 - The OpenAPI adapter claims no change feed, because a generic document declares none,
   and its optimistic concurrency is best-effort: an `ETag`, else a `version` field, else
   nothing — and it says so rather than implying a guarantee it cannot make.

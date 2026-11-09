@@ -41,6 +41,7 @@ something anything everyone someone thing things work working show list find giv
 worst best most least more less other another same each every both few many much such own here
 right left back next last first then than while when during into onto upon still yet ever never
 please kindly maybe perhaps quickly simply exactly actually basically currently
+nobody anybody anyone
 """.split())
 
 # Verb families. The words are the operator's, so they are matched loosely; the
@@ -93,6 +94,16 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
     "rep": ("agent", "assignee"),
     "restock": ("reorder", "replenish"),
     "vip": ("priority", "tier"),
+    "unassigned": ("assignee",),
+    "assigned": ("assignee",),
+    "owner": ("assignee",),
+    "bug": ("label", "labels"),
+    "tagged": ("label", "labels"),
+    "labelled": ("label", "labels"),
+    "labeled": ("label", "labels"),
+    "stale": ("updated", "comments"),
+    "discussed": ("comments",),
+    "author": ("user", "creator"),
 }
 
 

@@ -114,10 +114,18 @@ def test_health_never_raises(graph):
 
 # ── configuration ─────────────────────────────────────────────────────────────
 
-def test_the_bundled_default_configuration_is_valid(morph_home, monkeypatch):
+def test_an_unconfigured_morph_is_connected_to_nothing(morph_home, monkeypatch):
+    """No demo wiring by default: what MORPH can reach is what someone connected."""
     monkeypatch.delenv("MORPH_CONFIG", raising=False)
     current = reload_settings()
-    assert current.source == "bundled-default"
+    assert current.source == "empty"
+    assert current.connectors == ()
+
+
+def test_the_sandbox_configuration_is_valid(morph_home, monkeypatch):
+    from morph.config import SANDBOX_CONFIG_PATH
+    monkeypatch.setenv("MORPH_CONFIG_FILE", str(SANDBOX_CONFIG_PATH))
+    current = reload_settings()
     assert {c.id for c in current.connectors} == {"storefront", "helpdesk", "warehouse"}
     assert current.allow_loopback is True
     assert current.roles["operator"].can_approve is True

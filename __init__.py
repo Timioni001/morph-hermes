@@ -192,7 +192,7 @@ def register(ctx) -> None:  # noqa: ANN001 - Hermes passes its PluginContext
 
 def _register_command(ctx) -> None:  # noqa: ANN001
     ctx.register_command(name="morph", handler=_slash_command,
-                         description="Show or recompose the MORPH workspace",
+                         description="Connections, pending approvals, or recompose the MORPH workspace",
                          args_hint="[status | pending | goal <what you want to do>]")
 
 
@@ -209,7 +209,7 @@ def _register_prompt_section(ctx) -> None:  # noqa: ANN001
 # session's available skills. They are how the agent learns MORPH's discipline
 # (propose, wait, verify) without that discipline having to fit in a tool description.
 BUNDLED_SKILLS = (
-    ("operations-triage", "Work a backlog that spans several connected applications."),
+    ("triage", "Work through a backlog in a connected service, leaving proposals to approve."),
     ("connect-an-application", "Connect a new application to MORPH, or write an adapter."),
     ("verified-change", "Propose, wait for a human, then verify from the source."),
 )
