@@ -16,15 +16,30 @@ from Linux.
 sudo apt update && sudo apt install -y python3-venv python3-pip ffmpeg curl git
 ```
 
-Node 20+ is needed for the browser suite, and Ubuntu's packaged npm is usually too
-old. `nvm` avoids both a root install and a piped-to-shell setup script:
+Node 20+ is needed for the browser suite. **Check what you have before installing
+anything** — many WSL images already carry a recent Node:
 
 ```bash
-sudo apt install -y nodejs npm            # only to bootstrap; nvm replaces it
-git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm
-. ~/.nvm/nvm.sh && nvm install 20 && nvm use 20
-node -v                                   # expect v20.x or newer
+node -v && npm -v
 ```
+
+If that prints `v20` or newer, you are done; skip to the clone.
+
+If Node is missing, install it from NodeSource, which ships `node` *and* `npm` in one
+package:
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource.sh
+less /tmp/nodesource.sh
+sudo -E bash /tmp/nodesource.sh
+sudo apt install -y nodejs          # NOT "nodejs npm" — see below
+```
+
+> **Do not ask apt for `nodejs npm` together.** The NodeSource `nodejs` package
+> bundles npm and declares `Conflicts: npm`, so requesting both is unsatisfiable and
+> apt refuses with a long dependency wall. It changes nothing when it does — your
+> system is fine, just drop `npm` from the command. If `npm` is somehow missing from
+> an existing Node, `sudo corepack enable npm` restores it without apt.
 
 ```bash
 git clone https://github.com/timioni001/morph-hermes ~/morph-hermes
@@ -204,4 +219,5 @@ Deadline is **5PM EST on 11 November**.
 | Connector says it needs a credential | token not in the profile environment | `python -m apps.serve --print-tokens >> ~/.hermes/.env` |
 | `localhost` refuses from Windows | service bound to a container address | bind `127.0.0.1` (the default here) |
 | Tests are slow | repository under `/mnt/c` | move it to `~` |
+| apt: `nodejs : Conflicts: npm` | asked for `nodejs npm` together | drop `npm`; NodeSource's `nodejs` already includes it |
 | `does not appear to be a Python project` | the clone is on the old `main` | `git fetch origin && git checkout main && git pull` |
