@@ -60,11 +60,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Hermes
-        run: pip install hermes-agent
+      # PyPI stops at 0.19, which has no `hermes plugins doctor`. Hermes is released
+      # from its repository, and reads its own version from the release tags, so it
+      # is installed from source at the exact commit of the release MORPH is
+      # verified against (v0.23.0), with full history so the tags resolve.
+      - uses: actions/checkout@v4
+        with:
+          repository: NousResearch/hermes-agent
+          ref: 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19   # v0.23.0
+          fetch-depth: 0
+          path: hermes-agent
+      - name: Install Hermes v0.23.0 from source
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./hermes-agent
+          hermes --version
+      - name: The installed Hermes is the one the README names
+        run: hermes --version | grep -F "v0.23.0"
       - name: Plugin doctor
         working-directory: morph
         run: hermes plugins doctor . --ci
       - name: Plugin validate
         working-directory: morph
-        run: hermes plugins validate .
+        run: hermes plugins validate . --install-deps
