@@ -21,6 +21,8 @@ cleanup() {
 [[ "${1:-}" == "--keep" ]] && KEEP=1
 trap cleanup EXIT
 
+"$PYTHON" -c "import sys; sys.path.insert(0, '.'); from morph.preflight import require; require()" || exit 1
+
 echo "› building the dashboard bundle"
 node scripts/build_dashboard.mjs
 node scripts/fetch_test_vendor.mjs

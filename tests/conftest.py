@@ -231,3 +231,15 @@ def live_config(live_apps: LiveApps, morph_home: Path,
     monkeypatch.setenv("MORPH_CONFIG", json.dumps(live_apps.config()))
     _reset_morph()
     return live_apps
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Fail the session with an instruction, not an import traceback.
+
+    Collection imports fastapi long before any fixture runs, so the check has to
+    happen here to be the first thing a contributor sees.
+    """
+    from morph.preflight import message, missing
+    absent = missing()
+    if absent:
+        raise pytest.UsageError("\n" + message(absent))

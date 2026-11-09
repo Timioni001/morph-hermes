@@ -120,6 +120,9 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["MORPH_DATA_DIR"] = str(morph_data)
     os.environ.pop("MORPH_CONFIG", None)
 
+    from morph.preflight import require
+    require()
+
     print(f"{BOLD}MORPH — software that adapts to you{RESET}")
     say(f"{DIM}demo data: {workdir}{RESET}")
 

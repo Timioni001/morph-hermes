@@ -45,8 +45,14 @@ sudo apt install -y nodejs          # NOT "nodejs npm" — see below
 git clone https://github.com/timioni001/morph-hermes ~/morph-hermes
 cd ~/morph-hermes
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev]"          # do not skip this — nothing works until it runs
+python -c "import fastapi, uvicorn, httpx, pytest; print('ready')"
 ```
+
+> **Run everything through `python -m`**, not the bare command. With a venv active
+> but empty, `pytest` falls through `PATH` to a system install and reports confusing
+> errors from the wrong interpreter. `python -m pytest` can only ever use the
+> interpreter you activated.
 
 ```bash
 # Chromium plus the Linux libraries it needs under WSL.
@@ -59,7 +65,7 @@ npx playwright install --with-deps chromium
 ## 2. Prove it works, in four commands
 
 ```bash
-pytest
+python -m pytest
 ```
 
 ```bash
@@ -221,3 +227,5 @@ Deadline is **5PM EST on 11 November**.
 | Tests are slow | repository under `/mnt/c` | move it to `~` |
 | apt: `nodejs : Conflicts: npm` | asked for `nodejs npm` together | drop `npm`; NodeSource's `nodejs` already includes it |
 | `does not appear to be a Python project` | the clone is on the old `main` | `git fetch origin && git checkout main && git pull` |
+| `No module named 'fastapi'` | `pip install -e ".[dev]"` has not run in this venv | run it; every entry point now says so instead of showing a traceback |
+| `pytest` errors mention `/usr/lib/python3.x` | a system `pytest` was found on `PATH` | use `python -m pytest` |
