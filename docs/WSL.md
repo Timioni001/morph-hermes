@@ -131,12 +131,21 @@ source ~/.bashrc
 hermes setup --portal          # or: hermes model
 ```
 
+> **Check free disk first.** Hermes clones its own repository, fetches a
+> managed Python with `uv` and builds its products — several gigabytes. WSL2
+> stores all of that in a virtual disk on your Windows drive, so a full `C:`
+> stops the install part-way. `df -h /` before you start, and see
+> *Reclaiming disk space* below if it is tight.
+
 ```bash
 ln -s ~/morph-hermes ~/.hermes/plugins/morph
 hermes plugins doctor ~/.hermes/plugins/morph --ci
-hermes plugins validate ~/.hermes/plugins/morph --install-deps
+hermes plugins validate ~/.hermes/plugins/morph
 hermes plugins enable morph
 ```
+
+MORPH declares `dependencies = []`, so `--install-deps` has nothing to install
+for it. `make validate-ci` adds the flag if you want exactly what catalog CI runs.
 
 Give MORPH the demo tokens in the Hermes profile environment, so the connectors can
 authenticate the way they would against any real service:
@@ -228,6 +237,50 @@ Then:
 
 Deadline is **5PM EST on 11 November**.
 
+## Reclaiming disk space
+
+Deleting files inside WSL does **not** give the space back to Windows. The
+virtual disk only ever grows, so after a cleanup Windows still sees it as full.
+You have to shrink it too, and that is the step people miss.
+
+First, from inside WSL, find what is large:
+
+```bash
+df -h / && du -xh --max-depth=1 ~ 2>/dev/null | sort -h | tail -15
+```
+
+The usual consumers, largest first — check each exists before removing it:
+
+```bash
+du -sh ~/.hermes ~/.cache/uv ~/.cache/pip ~/.cache/ms-playwright ~/.npm 2>/dev/null
+```
+
+```bash
+rm -rf ~/.cache/uv ~/.cache/pip ~/.npm/_cacache
+sudo apt clean
+```
+
+MORPH's own footprint is about 75 MB including its virtual environment, so it
+is not worth touching. `make clean` reclaims roughly 50 MB if you want it back.
+
+Then shrink the virtual disk. From **PowerShell on Windows**:
+
+```powershell
+wsl --shutdown
+```
+
+```powershell
+wsl --manage Ubuntu --set-sparse true
+```
+
+That makes the disk release freed space automatically from then on, which is
+the one-time fix. (Substitute your distribution's name from `wsl --list`. On
+WSL older than 2.0 the flag does not exist — update with `wsl --update`, or
+compact manually with `diskpart`.)
+
+If `C:` itself is nearly full, no amount of cleanup inside WSL will help; free
+space on Windows first.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -244,4 +297,5 @@ Deadline is **5PM EST on 11 November**.
 | `No module named 'fastapi'` | `pip install -e ".[dev]"` has not run in this venv | run it; every entry point now says so instead of showing a traceback |
 | `pytest` errors mention `/usr/lib/python3.x` | a system `pytest` was found on `PATH` | use `make test`, or `./.venv/bin/python -m pytest` |
 | `error: externally-managed-environment` | the venv is not active in this shell (no `(.venv)` in the prompt) | `make install` — it never needs activation |
+| WSL dies part-way through the Hermes install | the virtual disk filled your Windows drive | see *Reclaiming disk space* above; freeing space inside WSL alone is not enough |
 | A `make` target reinstalls every time | `pyproject.toml` is newer than `.venv/.installed` | expected once after a `git pull` that changed it; otherwise `make reinstall` |

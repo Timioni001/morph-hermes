@@ -14,7 +14,8 @@
 #   make demo        the end-to-end acceptance script
 #   make serve       demo applications + dashboard, left running
 #   make check       install, test, bundle freshness — what CI runs
-#   make validate    the Hermes catalog admission checks
+#   make validate    the Hermes plugin checks (no dependency install)
+#   make validate-ci the same, plus --install-deps, as catalog CI runs them
 #   make clean       remove .venv, caches and test artefacts
 
 VENV    := .venv
@@ -23,7 +24,7 @@ STAMP   := $(VENV)/.installed
 SYSPY   ?= python3
 
 .DEFAULT_GOAL := help
-.PHONY: help install reinstall test e2e demo serve check validate bundle clean
+.PHONY: help install reinstall test e2e demo serve check validate validate-ci bundle clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   /  /'
@@ -62,7 +63,14 @@ bundle:
 
 check: test bundle
 
+# MORPH declares `dependencies = []`, so there is nothing for --install-deps to
+# install; leaving it off keeps the check from building a resolver environment
+# on a machine that may be short of disk. validate-ci mirrors catalog admission.
 validate: $(STAMP)
+	hermes plugins doctor . --ci
+	hermes plugins validate .
+
+validate-ci: $(STAMP)
 	hermes plugins doctor . --ci
 	hermes plugins validate . --install-deps
 
