@@ -22,6 +22,7 @@ OUT="${OUT:-.media}"
 WORK="$(mktemp -d /tmp/morph-video.XXXXXX)"
 export MORPH_DEMO_DATA_DIR="$WORK/apps"
 export MORPH_DATA_DIR="$WORK/morph"
+export MORPH_CONFIG_FILE="$PWD/config/connectors.sandbox.json"
 mkdir -p "$MORPH_DEMO_DATA_DIR" "$MORPH_DATA_DIR" "$OUT"
 
 cleanup() {
@@ -50,6 +51,14 @@ export MORPH_STOREFRONT_TOKEN MORPH_HELPDESK_TOKEN MORPH_WAREHOUSE_TOKEN
 "$PYTHON" -m tests.e2e.harness.serve --port 8820 >"$WORK/harness.log" 2>&1 &
 PIDS="$PIDS $!"
 for _ in $(seq 1 40); do curl -sf http://127.0.0.1:8820/ >/dev/null && break; sleep 0.5; done
+
+# Narration is optional: with a Piper voice model present, each caption is spoken.
+#   pip install piper-tts, then put en_US-ryan-high.onnx(+.json) in $OUT/voice/
+VOICE_MODEL="${VOICE_MODEL:-$OUT/voice/en_US-ryan-high.onnx}"
+if [ -f "$VOICE_MODEL" ] && "$PYTHON" -c "import piper" 2>/dev/null; then
+  echo "› synthesising the narration"
+  "$PYTHON" scripts/voice.py --model "$VOICE_MODEL" --out "$OUT/voice"
+fi
 
 echo "› recording"
 node scripts/record_demo.cjs --out "$OUT"

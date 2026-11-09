@@ -14,6 +14,7 @@ mis-parses the rest of the chain when it meets one.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
@@ -90,12 +91,30 @@ def main(argv: list[str] | None = None) -> int:
         graph = build_filter(captions, font, width, height, Path(scratch))
         script = Path(scratch) / "filter.txt"
         script.write_text(graph, encoding="utf-8")
-        subprocess.run([
-            "ffmpeg", "-y", "-loglevel", "error", "-i", args.input,
-            "-t", str(MAX_SECONDS), "-filter_script:v", str(script),
-            "-c:v", "libx264", "-preset", "slow", "-crf", "20",
-            "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", args.output,
-        ], check=True)
+        voice = Path(args.captions).parent / "voice"
+        clips = []
+        for caption in captions:
+            name = hashlib.sha1(caption["text"].encode("utf-8")).hexdigest()[:12] + ".wav"
+            if (voice / name).is_file():
+                clips.append((voice / name, float(caption["start"]) + 0.2))
+        command = ["ffmpeg", "-y", "-loglevel", "error", "-i", args.input]
+        for clip, _start in clips:
+            command += ["-i", str(clip)]
+        command += ["-t", f"{min(duration + 0.6, MAX_SECONDS):.2f}", "-filter_script:v", str(script)]
+        if clips:
+            # Each line starts with its caption; one loudness pass over the mix.
+            chain = "".join(f"[{i + 1}:a]adelay={int(start * 1000)}:all=1[a{i}];"
+                            for i, (_clip, start) in enumerate(clips))
+            chain += "".join(f"[a{i}]" for i in range(len(clips)))
+            chain += (f"amix=inputs={len(clips)}:normalize=0,"
+                      "highpass=f=70,loudnorm=I=-16:TP=-1.5:LRA=11,apad[aout]")
+            command += ["-filter_complex", chain, "-map", "0:v", "-map", "[aout]",
+                        "-c:a", "aac", "-b:a", "160k", "-ar", "48000"]
+        else:
+            command += ["-an"]
+        command += ["-c:v", "libx264", "-preset", "slow", "-crf", "20",
+                    "-pix_fmt", "yuv420p", "-movflags", "+faststart", args.output]
+        subprocess.run(command, check=True)
 
     size = Path(args.output).stat().st_size
     print(f"{args.output}: {size / 1_000_000:.1f} MB, {min(duration, MAX_SECONDS):.1f}s")

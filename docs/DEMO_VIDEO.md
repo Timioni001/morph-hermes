@@ -54,6 +54,15 @@ same loop against three offline practice services, with the service's own page a
 
 ---
 
+## A ready-made cut
+
+`scripts/make_video.sh` records a real browser session against the offline sandbox
+and writes `.media/morph-demo.mp4`: about a minute, captioned, and narrated if a Piper
+voice model is present (free, runs locally). It shows the sandbox, not GitHub — use it
+as is, or as the fallback if you cannot record the GitHub cut above.
+
+---
+
 ## Lines worth saying out loud
 
 - *"The agent cannot approve. There is no tool that approves."*
