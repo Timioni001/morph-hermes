@@ -72,13 +72,16 @@ def get_secret(name: str) -> str:
     """
     if not ENV_NAME.match(name or ""):
         raise ConfigError(f"{name!r} is not a valid environment variable name")
-    value = ""
     try:
         from agent.secret_scope import get_secret as hermes_secret  # published plugin API
-        value = hermes_secret(name, "") or ""
-    except Exception:  # noqa: BLE001 - outside Hermes, or no scope bound
-        value = ""
-    return value.strip() or os.environ.get(name, "").strip()
+    except ImportError:
+        # Not running inside Hermes (tests, the offline demo): there is no
+        # profile to respect, so the process environment is the only source.
+        return os.environ.get(name, "").strip()
+    try:
+        return str(hermes_secret(name, "") or "").strip()
+    except Exception:  # noqa: BLE001 - no scope bound: fail closed, never fall back
+        return ""
 
 
 # ─────────────────────────────── network policy ────────────────────────────────

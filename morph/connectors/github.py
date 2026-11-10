@@ -41,6 +41,20 @@ from morph.connectors.http_rest import _local_match
 from morph.errors import ConfigError, ConnectorError, NotFound, PermissionDenied, StaleRecord
 from morph.util import clean_text
 
+ISSUE_NUMBER = re.compile(r"^[1-9][0-9]{0,9}$")
+
+
+def _issue_number(record_id: Any) -> str:
+    """A GitHub issue is addressed by its number and nothing else.
+
+    The id can come from the model; anything that is not a plain number (``../``,
+    a slash, an owner/repo) is refused rather than placed in the request path.
+    """
+    rid = str(record_id if record_id is not None else "").strip()
+    if not ISSUE_NUMBER.match(rid):
+        raise NotFound(f"{rid[:40]!r} is not a GitHub issue number")
+    return rid
+
 API_ROOT = "https://api.github.com"
 # Each segment must start with an alphanumeric: "../etc" is a valid-looking
 # "owner/name" to a lazier pattern, and it has no business reaching a URL builder.
@@ -391,6 +405,7 @@ class GitHubConnector(Connector):
 
     def get(self, entity: str, record_id: str) -> Optional[dict[str, Any]]:
         self.entity_or_raise(entity)
+        record_id = _issue_number(record_id)
         status, payload, _ = self._request("GET", f"/repos/{self.repo}/issues/{record_id}")
         if status == 404:
             return None
@@ -469,7 +484,7 @@ class GitHubConnector(Connector):
 
         body = self._body_for(operation, params)
         status, payload, _ = self._request(
-            "PATCH", f"/repos/{self.repo}/issues/{record_id}", body=body)
+            "PATCH", f"/repos/{self.repo}/issues/{_issue_number(record_id)}", body=body)
         if status == 404:
             raise NotFound(f"issue {record_id} is no longer reachable in {self.repo}")
         if status in (401, 403):

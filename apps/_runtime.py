@@ -174,7 +174,20 @@ class AppSpec:
 
 def data_dir() -> Path:
     """Where the demo applications keep their databases and bearer tokens."""
-    root = Path(os.environ.get("MORPH_DEMO_DATA_DIR") or (Path.home() / ".morph-demo"))
+    override = os.environ.get("MORPH_DEMO_DATA_DIR", "").strip()
+    if override:
+        root = Path(override)
+    else:  # inside MORPH's own plugin data directory, never loose in $HOME
+        morph_data = os.environ.get("MORPH_DATA_DIR", "").strip()
+        if morph_data:
+            root = Path(morph_data) / "demo"
+        else:
+            try:  # published plugin API: honours the active Hermes profile
+                from plugins.plugin_storage import plugin_data_dir
+                root = Path(plugin_data_dir("morph")) / "demo"
+            except Exception:  # noqa: BLE001 - running outside Hermes
+                home = os.environ.get("HERMES_HOME") or str(Path.home() / ".hermes")
+                root = Path(home) / "plugin-data" / "morph" / "demo"
     root = root.expanduser()
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     return root

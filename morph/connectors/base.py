@@ -16,7 +16,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional, Sequence
 
-from morph.errors import ConnectorError, SchemaError
+from urllib.parse import quote
+
+from morph.errors import ConnectorError, NotFound, SchemaError
 from morph.util import RISK_ORDER, clean_text
 
 FIELD_TYPES = ("id", "string", "text", "int", "float", "money", "bool", "enum", "datetime", "email")
@@ -347,6 +349,23 @@ class ApplyResult:
     record: dict[str, Any]
     changed: dict[str, Any]
     replayed: bool = False
+
+
+RECORD_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$")
+
+
+def record_segment(record_id: Any) -> str:
+    """A record id made safe to place in a URL path.
+
+    Record ids can come from the model, so one is never trusted to stay inside the
+    path it is put in: ``../`` would let an HTTP client collapse the path onto
+    another resource. Only a plain identifier is accepted, and it is still
+    percent-encoded with no safe characters.
+    """
+    rid = str(record_id if record_id is not None else "")
+    if not RECORD_ID.match(rid) or ".." in rid:
+        raise NotFound(f"{rid[:40]!r} is not a valid record id")
+    return quote(rid, safe="")
 
 
 class Connector(abc.ABC):
