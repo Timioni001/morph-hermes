@@ -27,6 +27,7 @@ from morph.config import (
     ConnectorConfig, assert_url_allowed, get_secret, is_loopback_host, settings,
 )
 from morph.connectors import netguard
+from morph.connectors.base import record_segment
 from morph.connectors.base import (
     ApplyResult, Connector, FetchResult, Predicate, SourceDescriptor,
 )
@@ -298,7 +299,7 @@ class HttpRestConnector(Connector):
 
     def get(self, entity: str, record_id: str) -> Optional[dict[str, Any]]:
         self.entity_or_raise(entity)
-        status, payload = self._request("GET", f"{self._records_path}/{entity}/{record_id}")
+        status, payload = self._request("GET", f"{self._records_path}/{entity}/{record_segment(record_id)}")
         if status == 404:
             return None
         if status != 200 or not isinstance(payload, dict):
@@ -344,7 +345,7 @@ class HttpRestConnector(Connector):
         if expected_version is not None:
             headers["If-Match"] = str(expected_version)
         status, payload = self._request(
-            "POST", f"{self._records_path}/{entity}/{record_id}/operations/{operation}",
+            "POST", f"{self._records_path}/{entity}/{record_segment(record_id)}/operations/{operation}",
             body={"params": params}, headers=headers)
         if status == 404:
             raise NotFound(f"{entity}/{record_id} no longer exists in {self.id!r}")

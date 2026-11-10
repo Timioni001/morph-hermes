@@ -44,6 +44,7 @@ from morph.connectors.base import (
     EntityDescriptor, FetchResult, FieldDescriptor, OperationDescriptor, Predicate,
     SourceDescriptor,
 )
+from morph.connectors.base import record_segment
 from morph.connectors.http_rest import HttpRestConnector, _local_match
 from morph.errors import ConnectorError, NotFound, PermissionDenied, StaleRecord
 from morph.util import clean_text
@@ -534,7 +535,7 @@ class OpenApiConnector(HttpRestConnector):
 
     def get(self, entity: str, record_id: str) -> Optional[dict[str, Any]]:
         _collection, item, _method, param = self._route(entity)
-        status, payload = self._request("GET", item.replace("{" + param + "}", str(record_id)))
+        status, payload = self._request("GET", item.replace("{" + param + "}", record_segment(record_id)))
         if status == 404:
             return None
         if status != 200 or not isinstance(payload, dict):
@@ -572,7 +573,7 @@ class OpenApiConnector(HttpRestConnector):
         elif expected_version is not None and "version" in before:
             headers["If-Match"] = str(expected_version)
 
-        path = item.replace("{" + param + "}", str(record_id))
+        path = item.replace("{" + param + "}", record_segment(record_id))
         status, payload = self._request(method.upper(), path, body=body, headers=headers)
         if status == 404:
             raise NotFound(f"{entity}/{record_id} no longer exists in {self.id!r}")

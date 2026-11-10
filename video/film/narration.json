@@ -1,62 +1,62 @@
 [
  {
   "id": "n1",
-  "at": 0.9,
+  "at": 0.8,
   "text": "A.I. can act. But who decides?",
-  "dur": 2.05
+  "dur": 2.03
  },
  {
   "id": "n2",
-  "at": 8.2,
+  "at": 7.7,
   "text": "Morph gives a Hermes agent one adaptive workspace across your applications, and keeps you in control of every change.",
-  "dur": 6.49
+  "dur": 7.06
  },
  {
   "id": "n3",
-  "at": 18.2,
+  "at": 17.7,
   "text": "This is a real GitHub repository, with ten open issues.",
-  "dur": 3.53
+  "dur": 3.82
  },
  {
   "id": "n4",
-  "at": 22.2,
-  "text": "We ask Hermes to triage them. It reads every issue through Morph, and proposes four changes.",
-  "dur": 5.19
+  "at": 21.7,
+  "text": "We ask Hermes to triage them. It reads each issue through Morph, and proposes five changes.",
+  "dur": 5.87
  },
  {
   "id": "n5",
-  "at": 29.6,
-  "text": "Morph composes a workspace for that goal, planned by the model from the live schema.",
-  "dur": 4.55
+  "at": 28.7,
+  "text": "State a goal, and the model composes a workspace for it, from the live schema.",
+  "dur": 4.25
  },
  {
   "id": "n6",
-  "at": 35.3,
+  "at": 35.2,
   "text": "The agent can only propose. Each change waits, with its exact before and after. On GitHub, nothing has moved.",
-  "dur": 6.52
+  "dur": 7.15
  },
  {
   "id": "n7",
-  "at": 50.2,
-  "text": "A person approves. Morph writes to GitHub, then reads each issue back to verify it.",
-  "dur": 4.82
+  "at": 49.7,
+  "text": "A person decides. Four approved, one declined. Morph writes to GitHub, then reads each issue back to verify it.",
+  "dur": 7.19
  },
  {
   "id": "n8",
-  "at": 60.6,
+  "at": 60.8,
   "text": "And on GitHub itself: duplicates closed, the title fixed, the bug assigned.",
-  "dur": 4.33
+  "dur": 4.63
  },
  {
   "id": "n9",
-  "at": 68.2,
+  "at": 67.7,
   "text": "Every step lands in a tamper-evident log. Change the goal, and the interface adapts. Any A.P.I. with an Open A.P.I. document connects the same way.",
-  "dur": 8.44
+  "dur": 10.2
  },
  {
   "id": "n10",
-  "at": 79.4,
+  "at": 79.3,
   "text": "Morph. Software that adapts to you. Powered by Hermes Agent.",
-  "dur": 3.74
+  "dur": 3.69
  }
 ]

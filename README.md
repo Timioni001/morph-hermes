@@ -13,7 +13,7 @@ acting alone:
 
 ![MORPH inside the Hermes dashboard](docs/assets/morph-in-hermes.png)
 
-<sub>Verified on Hermes Agent v0.23.0 · 243 tests · 39 browser checks · MIT</sub>
+<sub>Verified on Hermes Agent v0.23.0 · 281 tests · 39 browser checks · MIT</sub>
 
 ## Install
 
@@ -131,7 +131,7 @@ exact to verify. Labels are set as a whole list for the same reason.
   a Hermes agent proposed four changes, a person approved them in the dashboard, and MORPH
   applied and verified each one. The result was confirmed separately through the GitHub API
   and on github.com.
-- **Tests:** 243 Python tests (unit, integration, security) and 39 browser checks.
+- **Tests:** 281 Python tests (unit, integration, security) and 39 browser checks.
 - **Hermes:** `hermes plugins doctor` and `hermes plugins validate --install-deps` pass in
   CI against Hermes v0.23.0.
 - **Not run live:** `set_labels` and `unassign` on GitHub, and writes through the OpenAPI
