@@ -12,6 +12,8 @@ const flag = (n, d) => { const i = args.indexOf("--" + n); return i >= 0 ? (args
 const OUT = path.resolve(flag("out", "video/footage"));
 const REHEARSE = args.includes("--rehearse");
 const BASE = "http://127.0.0.1:9119/morph";
+const GOAL1 = "Find the duplicates and the unassigned bugs";
+const GOAL2 = "Compare issues by state";
 fs.mkdirSync(OUT, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const beats = [];
@@ -41,6 +43,12 @@ const CURSOR = `
   await page.waitForSelector(".morph", { timeout: 30000 });
   const x = page.getByRole("button", { name: /^(Close|Dismiss)$/ });
   if (await x.count()) { await x.first().click().catch(() => {}); }
+  // Give the plugin the room: fold the host's navigation column away.
+  const fold = page.getByRole("button", { name: /collapse|sidebar/i });
+  if (await fold.count()) { await fold.first().click().catch(() => {}); await wait(600); }
+  // Film the interface large: page zoom keeps every pixel native, unlike scaling video.
+  await page.evaluate(() => { document.documentElement.style.zoom = "1.5"; });
+  await wait(800);
   await page.evaluate(CURSOR);
   const morph = page.locator(".morph");
   const glide = async (locator) => {
@@ -61,12 +69,12 @@ const CURSOR = `
   await press(input);
   beat("goal-typing");
   await input.fill("");
-  await input.type("Triage the open issues", { delay: 55 });
+  await input.type(GOAL1, { delay: 55 });
   await wait(500);
   await press(page.getByRole("button", { name: /Transform workspace|Compose workspace/ }));
   beat("compose-click");
-  await page.waitForFunction(() => /Triage the open issues/i.test(
-    (document.querySelector(".morph .mo-topbar") || document.body).textContent), null, { timeout: 120000 });
+  await page.waitForFunction((g) => (document.querySelector(".morph .mo-topbar") || document.body)
+    .textContent.includes(g), GOAL1, { timeout: 180000 });
   await page.waitForSelector(".morph .mo-metric-value", { timeout: 60000 });
   beat("workspace-ready"); await wait(3200);
   await page.mouse.move(1100, 620, { steps: 20 });
@@ -81,12 +89,15 @@ const CURSOR = `
 
   if (!REHEARSE) {
     // 4 ─ a person approves; MORPH writes to GitHub and reads the issue back
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       const card = page.locator(".mo-approval").first();
       if (!(await card.count())) { break; }
       const before = await page.locator(".mo-approval").count();
-      await press(card.getByRole("button", { name: "Approve & apply" }));
-      beat("approve-" + (i + 1));
+      // Two proposals touch issue #7. The person keeps the new title and declines
+      // the label change, which was built against the issue as it was before.
+      const decline = /set labels/i.test(await card.textContent());
+      await press(card.getByRole("button", { name: decline ? "Reject" : "Approve & apply" }));
+      beat((decline ? "reject-" : "approve-") + (i + 1));
       await page.waitForFunction((n) => document.querySelectorAll(".mo-approval").length < n, before, { timeout: 60000 });
       beat("applied-" + (i + 1));
       await wait(i === 0 ? 3000 : 1500);
@@ -100,12 +111,12 @@ const CURSOR = `
     await press(input);
     await input.fill("");
     beat("goal2-typing");
-    await input.type("Compare issues by state", { delay: 55 });
+    await input.type(GOAL2, { delay: 55 });
     await wait(400);
     await press(page.getByRole("button", { name: /Transform workspace/ }));
     beat("compose2-click");
-    await page.waitForFunction(() => /Compare issues by state/i.test(
-      (document.querySelector(".morph .mo-topbar") || document.body).textContent), null, { timeout: 120000 });
+    await page.waitForFunction((g) => (document.querySelector(".morph .mo-topbar") || document.body)
+      .textContent.includes(g), GOAL2, { timeout: 180000 });
     beat("workspace2-ready"); await wait(5000);
   }
   beat("end");

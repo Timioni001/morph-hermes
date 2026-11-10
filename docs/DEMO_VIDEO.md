@@ -27,9 +27,12 @@ node video/capture/github.cjs --tag before && node video/capture/dashboard.cjs &
 cd video/film && npm install && npx remotion render src/index.jsx Morph out/morph.mp4
 ```
 
-Captures go to `video/footage/` and are copied into `video/film/public/` with the
-narration (`narration.json`, synthesised locally with Piper) and the sound beds. None of
-those are committed.
+Captures go to `video/footage/` and are copied into `video/film/public/`.
+`video/film/make_audio.py` writes the narration there (Kokoro, an open-source voice that
+runs locally) and synthesises the music bed. None of those files are committed.
+
+The dashboard is filmed at 150% page zoom with the host's navigation folded away, so the
+interface is large and every pixel is native.
 
 ## Caption for the X post
 
